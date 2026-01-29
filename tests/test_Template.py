@@ -23,9 +23,9 @@ def test_open_google_with_unique_profile(row, driver, wait):
     logger.info(f"Profile Name from driver: {profile_name_from_driver(driver)}")
 
     # Measure connection time
-    url = get_env("APP_URL")
+    url = get_env("Ajaj_URL")
     if url is None or url.strip() == "":
-        assert False, "APP_URL environment variable is not set."
+        assert False, "Ajaj_URL environment variable is not set."
 
     logger.info(f"Opening {url}")
     start_time = time.time()

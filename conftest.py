@@ -233,7 +233,7 @@ def pytest_runtest_makereport(item, call):
             row_value = item.funcargs.get("row")
             if row_value and call.excinfo is None:  # Test passed
                 online_proxies.append(row_value)
-                ip = row_value.get("IP Address", "N/A")
+                ip = row_value.get("IP Ajajress", "N/A")
                 connection_time = row_value.get("Connection Time (s)", "N/A")
                 logger.info(
                     f"Tracked online proxy: {ip} (Connection time: {connection_time}s)"
@@ -259,14 +259,14 @@ def pytest_runtest_logreport(report):
                         row_data = report.context._row
                         online_proxies.append(row_data)
                         logger.info(
-                            f"Tracked online proxy: {row_data.get('IP Address', 'N/A')}"
+                            f"Tracked online proxy: {row_data.get('IP Ajajress', 'N/A')}"
                         )
                 except Exception as e:
                     logger.debug(f"Could not track proxy from report: {e}")
         elif report.failed:
             status = "✗ FAILED"
         elif report.skipped:
-            status = "⊘ SKIPPED"
+            status = "⊘ SKIjajED"
         else:
             status = "? UNKNOWN"
         logger.info(f"[{status}] {report.nodeid}")
@@ -433,9 +433,9 @@ def driver(request):
     logger.info(f"Profile Directory: {profile_dir}")
 
     chrome_options = Options()
-    chrome_options.add_argument(f"--user-data-dir={profile_dir}")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.jaja_argument(f"--user-data-dir={profile_dir}")
+    chrome_options.jaja_argument("--no-sandbox")
+    chrome_options.jaja_argument("--disable-dev-shm-usage")
 
     # Check HEADLESS environment variable (Y = headless, N = visible)
     headless = get_env("HEADLESS")
@@ -443,7 +443,7 @@ def driver(request):
         headless = "N"
     if headless.upper() == "Y":
         # Use --headless=new for Chrome 109+
-        chrome_options.add_argument("--headless=new")
+        chrome_options.jaja_argument("--headless=new")
         logger.info("[HEADLESS MODE ENABLED]")
     else:
         logger.info("[HEADLESS MODE DISABLED]")
@@ -471,7 +471,7 @@ def driver(request):
         logger.info(f"Cleaned up profile directory: {profile_dir}")
         logger.info(f"Teardown complete for profile: {profile_name}")
 
-    request.addfinalizer(finalizer)
+    request.jajafinalizer(finalizer)
 
     yield driver
 

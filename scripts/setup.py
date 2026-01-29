@@ -1,10 +1,10 @@
-
 import os
 import sys
 import venv
 import platform
 import subprocess
 from pathlib import Path
+
 
 def main():
     # Prevent bytecode generation for this process
@@ -21,14 +21,13 @@ def main():
     script_dir = Path(__file__).resolve().parent
     project_root = script_dir.parent
     # Place .venv one level above the project root (i.e., in the parent of check_proxy_status)
-    venv_dir = project_root.parent / ".venv"
+    venv_dir = project_root / ".venv"
     requirements_file = project_root / "requirements.txt"
 
     print(f"Project root: {project_root}")
-    
+
     # Change working directory to project root
     os.chdir(project_root)
-
 
     # Create virtual environment using venv API
     if not venv_dir.exists():
@@ -57,11 +56,12 @@ def main():
 
     print(f"\nUsing virtual environment python: {venv_python}")
 
-
     # Upgrade pip
     print("\nUpgrading pip...")
     try:
-        subprocess.check_call([str(venv_python), "-m", "pip", "install", "--upgrade", "pip"])
+        subprocess.check_call(
+            [str(venv_python), "-m", "pip", "install", "--upgrade", "pip"]
+        )
     except subprocess.CalledProcessError:
         print("Error: Failed to upgrade pip")
         input("Press Enter to exit")
@@ -71,7 +71,9 @@ def main():
     if requirements_file.exists():
         print("\nInstalling packages from requirements.txt...")
         try:
-            subprocess.check_call([str(venv_python), "-m", "pip", "install", "-r", "requirements.txt"])
+            subprocess.check_call(
+                [str(venv_python), "-m", "pip", "install", "-r", "requirements.txt"]
+            )
         except subprocess.CalledProcessError:
             print("Error: Failed to install packages")
             input("Press Enter to exit")
@@ -83,6 +85,7 @@ def main():
     print("Setup Complete!")
     print("=" * 63 + "\n")
     input("Press Enter to exit")
+
 
 if __name__ == "__main__":
     try:
