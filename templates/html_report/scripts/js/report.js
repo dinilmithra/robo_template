@@ -61,7 +61,7 @@ document.addEventListener('DOMContentLoaded', function() {
     window.statusColors = statusColors;
     window.centerPalette = centerPalette;
     window.statusTypes = statusTypes;
-    // 1. Test Results Summary (Pie)
+    // 1. Results Summary (Pie)
     (function() {
         const ctx = document.getElementById('summaryChart');
         if (!ctx) {
@@ -89,7 +89,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         labels: {
                             font: { size: 14 },
                             usePointStyle: true,
-                            pointStyle: 'circle',
+                            pointStyle: 'rect',
                             generateLabels: function(chart) {
                                 const data = chart.data;
                                 return data.labels.map((label, i) => {
@@ -107,14 +107,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     },
                     title: {
                         display: true,
-                        text: 'Test Results Summary',
+                        text: 'Results Summary',
                         font: { size: 18 }
                     }
                 }
             }
         });
     })();
-    // 2. Test Distribution by Center (Doughnut)
+    // 2. Distribution by Center (Doughnut)
     const centerCounts = {};
     allResults.forEach(r => {
         if (r.center && r.center !== '-') {
@@ -147,7 +147,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         labels: {
                             font: { size: 14 },
                             usePointStyle: true,
-                            pointStyle: 'circle',
+                            pointStyle: 'rect',
                             generateLabels: function(chart) {
                                 // Always use centerPalette for legend colors
                                 return chart.data.labels.map((label, i) => {
@@ -166,7 +166,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     },
                     title: {
                         display: true,
-                        text: 'Test Distribution by Center',
+                        text: 'Distribution by Center',
                         font: { size: 18 }
                     }
                 }

@@ -1,4 +1,4 @@
-<!-- Test Results Summary Chart Component -->
+<!-- Results Summary Chart Component -->
 <div class="chart-container">
     <canvas id="summaryChart" width="360" height="288"></canvas>
 </div>
@@ -35,6 +35,13 @@ function initializeSummaryChart() {
         options: {
             responsive: false,
             plugins: {
+                title: {
+                    display: true,
+                    text: 'Results Summary',
+                    font: { size: 16, weight: 'bold' },
+                    color: '#212121',
+                    padding: { top: 0, bottom: 12 }
+                },
                 legend: {
                     display: true,
                     position: 'right',

@@ -49,22 +49,22 @@ logger.propagate = True
 # ============================================================================
 
 
-# Implemented Pytest Hooks
+# Implemented Pytest Hooks (in execution order)
 #
 #     1. pytest_configure(config)
 #         Called after command line options have been parsed and all plugins and initial conftest files loaded.
 #         Logs Python version and test session start time.
 #         ✅ Correct and useful for initial test session setup.
 #
-#     2. pytest_sessionstart(session)
-#         Called after the Session object has been created and before performing collection.
-#         Logs session start and session ID.
-#         ✅ Useful for tracking session lifecycle.
-#
-#     3. pytest_plugin_registered(plugin, manager)
+#     2. pytest_plugin_registered(plugin, manager)
 #         Called when a plugin is registered.
 #         Unregisters xdist if PARALLEL is disabled.
 #         ✅ Useful for controlling parallel execution in debug mode.
+#
+#     3. pytest_sessionstart(session)
+#         Called after the Session object has been created and before performing collection.
+#         Logs session start and session ID.
+#         ✅ Useful for tracking session lifecycle.
 #
 #     4. pytest_collection_modifyitems(config, items)
 #         Called after collection has been performed, can filter or re-order items.
@@ -76,40 +76,55 @@ logger.propagate = True
 #         Parametrizes tests with proxy rows if 'row' fixture is present.
 #         ✅ Useful for dynamic test generation.
 #
-#     6. pytest_fixture_setup(fixturedef, request)
+#     6. pytest_configure_node(node) [xdist-specific]
+#         Called for configuring a worker node before it runs tests.
+#         Initializes test_results_summary for each worker config.
+#         ✅ Useful for per-worker setup in parallel execution.
+#
+#     7. pytest_fixture_setup(fixturedef, request)
 #         Called during setup phase for fixtures.
 #         Logs fixture setup for function-scoped fixtures.
 #         ✅ Useful for tracking fixture initialization.
 #
-#     7. pytest_runtest_setup(item)
+#     8. pytest_runtest_setup(item)
 #         Called before running each test item.
 #         Logs setup phase for the test item.
 #         ✅ Useful for debugging test setup.
 #
-#     8. pytest_runtest_call(item)
+#     9. pytest_runtest_call(item)
 #         Called to execute the test item.
 #         Logs call phase for the test item.
 #         ✅ Useful for tracking test execution.
 #
-#     9. pytest_runtest_teardown(item, nextitem)
+#     10. pytest_runtest_makereport(item, call)
+#         Called to create a test report for each test phase.
+#         Collects test result summary and error logs.
+#         ✅ Useful for custom result handling and reporting.
+#
+#     11. pytest_runtest_logreport(report)
+#         Called after each test phase to process the report.
+#         Logs test result status and tracks test outcomes.
+#         ✅ Useful for logging and custom reporting.
+#
+#     12. pytest_runtest_teardown(item, nextitem)
 #         Called after test item execution for teardown.
 #         Logs teardown phase for the test item.
 #         ✅ Useful for debugging test cleanup.
 #
-#     10. pytest_runtest_makereport(item, call)
-#         Called to create a test report for each test phase.
-#         Tracks online proxies for passed tests.
-#         ✅ Useful for custom result handling and proxy tracking.
+#     13. pytest_testnodedown(node, error) [xdist-specific]
+#         Called when a worker node goes down after completing its tests.
+#         Aggregates test results from completed worker and logs any errors.
+#         ✅ Useful for collecting results and monitoring node failures.
 #
-#     11. pytest_runtest_logreport(report)
-#         Called after each test phase to process the report.
-#         Logs test result status and tracks successful proxies.
-#         ✅ Useful for logging and custom reporting.
-#
-#     12. pytest_sessionfinish(session, exitstatus)
+#     14. pytest_sessionfinish(session, exitstatus)
 #         Called after the whole test run finishes, right before returning the exit status.
-#         Exports online proxies and logs session end.
+#         Logs session end and exit status.
 #         ✅ Useful for final cleanup and reporting.
+#
+#     15. pytest_unconfigure(config)
+#         Called after all teardown and xdist worker aggregation is complete.
+#         Aggregates test results from all workers and generates HTML report.
+#         ✅ Useful for final report generation and result aggregation.
 #
 # ============================================================================
 
@@ -156,18 +171,6 @@ def pytest_configure(config):
         _MASTER_CONFIG = config
 
 
-def pytest_sessionstart(session):
-    """
-    Called after the Session object has been created and before performing collection.
-    - Logs session start and session ID.
-    - Useful for tracking session lifecycle.
-    """
-    logger.info("HOOK: pytest_sessionstart")
-    logger.info(f"{'Session Start':^70}")
-    logger.info(f"Test session ID: {session.name}")
-    logger.info(f"Start time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-
-
 def pytest_plugin_registered(plugin, manager):
     """
     Called when a plugin is registered.
@@ -183,6 +186,18 @@ def pytest_plugin_registered(plugin, manager):
         if parallel_disabled:
             logger.warning("Debugger active, unregistering pytest-xdist")
             manager.unregister(plugin)
+
+
+def pytest_sessionstart(session):
+    """
+    Called after the Session object has been created and before performing collection.
+    - Logs session start and session ID.
+    - Useful for tracking session lifecycle.
+    """
+    logger.info("HOOK: pytest_sessionstart")
+    logger.info(f"{'Session Start':^70}")
+    logger.info(f"Test session ID: {session.name}")
+    logger.info(f"Start time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
 
 def pytest_collection_modifyitems(config, items):
@@ -215,6 +230,18 @@ def pytest_generate_tests(metafunc):
     metafunc.parametrize("row", rows, ids=ids)
 
 
+def pytest_configure_node(node):
+    """
+    Called for configuring a worker node before it runs tests.
+    - Logs the configuration of the worker node.
+    - Correct and useful for debugging worker configuration.
+    """
+    logger.info("HOOK: pytest_configure_node")
+    logger.info(f"Configuring worker node: {node.gateway.id}")
+    # Ensure test_results_summary is initialized for each worker config (required for xdist)
+    node.config.test_results_summary = []
+
+
 def pytest_fixture_setup(fixturedef, request):
     """
     Called during setup phase for fixtures.
@@ -244,16 +271,6 @@ def pytest_runtest_call(item):
     """
     logger.info(f"HOOK: pytest_runtest_call")
     logger.info(f"[CALL] {item.name}")
-
-
-def pytest_runtest_teardown(item, nextitem):
-    """
-    Called after test item execution for teardown.
-    - Logs teardown phase for the test item.
-    - Useful for debugging test cleanup.
-    """
-    logger.info(f"HOOK: pytest_runtest_teardown")
-    logger.info(f"[TEARDOWN] {item.name}")
 
 
 def pytest_runtest_makereport(item, call):
@@ -351,6 +368,37 @@ def pytest_runtest_logreport(report):
         logger.info(f"[{status}] {report.nodeid}")
 
 
+def pytest_runtest_teardown(item, nextitem):
+    """
+    Called after test item execution for teardown.
+    - Logs teardown phase for the test item.
+    - Useful for debugging test cleanup.
+    """
+    logger.info(f"HOOK: pytest_runtest_teardown")
+    logger.info(f"[TEARDOWN] {item.name}")
+
+
+def pytest_testnodedown(node, error):
+    """
+    Called when a worker node goes down.
+    - Logs the node going down and any error.
+    - Correct and useful for monitoring node failures.
+    """
+    logger.info("HOOK: pytest_testnodedown")
+    logger.info(f"Worker node down: {node.gateway.id}")
+    if error:
+        logger.error(f"Node error: {error}")
+    # Use global _MASTER_CONFIG for aggregation
+    config = _MASTER_CONFIG
+    if config is None:
+        return
+    if not hasattr(config, "_test_results_from_workers"):
+        config._test_results_from_workers = []
+    results = node.workeroutput.get("test_results_summary", [])
+
+    flatten_results(results, config)
+
+
 def pytest_sessionfinish(session, exitstatus):
     """
     Called after the whole test run finishes, right before returning the exit status.
@@ -420,8 +468,56 @@ def pytest_unconfigure(config):
 
 
 # ============================================================================
-# Pytest-xdist Hooks
+# Pytest-xdist Hooks (in execution order)
 # ============================================================================
+
+# Implemented Pytest-xdist Hooks (in execution order)
+#
+#     1. pytest_xdist_auto_num_workers(config) [xdist-specific]
+#         Called to determine the number of workers for -n auto flag.
+#         Logs the hook call. Returns None to use default behavior.
+#         ✅ Useful for debugging parallel worker setup.
+#
+#     2. pytest_xdist_make_scheduler(config, log) [xdist-specific]
+#         Called to create a custom test scheduler.
+#         Logs the hook call and returns None to use default scheduler.
+#         ✅ Useful for customizing test distribution strategy.
+#
+#     3. pytest_xdist_setupnodes(config, specs) [xdist-specific]
+#         Called before any remote node is set up.
+#         Logs the number of worker nodes being set up.
+#         ✅ Useful for debugging parallel test setup.
+#
+#     4. pytest_xdist_newgateway(gateway) [xdist-specific]
+#         Called when a new gateway (worker) is created.
+#         Logs the creation of a new gateway.
+#         ✅ Useful for tracking worker creation.
+#
+#     5. pytest_xdist_node_collection_finished(node, ids) [xdist-specific]
+#         Called when a worker node finishes test collection.
+#         Logs the number of tests collected by the worker.
+#         ✅ Useful for monitoring collection progress.
+#
+# ============================================================================
+
+
+def pytest_xdist_auto_num_workers(config):
+    """
+    Called to determine the number of workers for -n auto.
+    - Logs the hook call.
+    - Correct, though you do not return a value (default behavior).
+    """
+    logger.info("HOOK: pytest_xdist_auto_num_workers")
+
+def pytest_xdist_make_scheduler(config, log):
+    """
+    Called to create a custom test scheduler.
+    - Logs the hook call and returns None to use the default scheduler.
+    - Correct, and returning None is the default/safe option.
+    """
+    logger.info("HOOK: pytest_xdist_make_scheduler")
+    # Return None to use default LoadScheduling
+    return None
 
 
 def pytest_xdist_setupnodes(config, specs):
@@ -444,39 +540,6 @@ def pytest_xdist_newgateway(gateway):
     logger.info(f"New gateway created: {gateway.id}")
 
 
-def pytest_configure_node(node):
-    """
-    Called for configuring a worker node before it runs tests.
-    - Logs the configuration of the worker node.
-    - Correct and useful for debugging worker configuration.
-    """
-    logger.info("HOOK: pytest_configure_node")
-    logger.info(f"Configuring worker node: {node.gateway.id}")
-    # Ensure test_results_summary is initialized for each worker config (required for xdist)
-    node.config.test_results_summary = []
-
-
-def pytest_testnodedown(node, error):
-    """
-    Called when a worker node goes down.
-    - Logs the node going down and any error.
-    - Correct and useful for monitoring node failures.
-    """
-    logger.info("HOOK: pytest_testnodedown")
-    logger.info(f"Worker node down: {node.gateway.id}")
-    if error:
-        logger.error(f"Node error: {error}")
-    # Use global _MASTER_CONFIG for aggregation
-    config = _MASTER_CONFIG
-    if config is None:
-        return
-    if not hasattr(config, "_test_results_from_workers"):
-        config._test_results_from_workers = []
-    results = node.workeroutput.get("test_results_summary", [])
-
-    flatten_results(results, config)
-
-
 def pytest_xdist_node_collection_finished(node, ids):
     """
     Called when a worker node finishes test collection.
@@ -484,26 +547,6 @@ def pytest_xdist_node_collection_finished(node, ids):
     """
     logger.info("HOOK: pytest_xdist_node_collection_finished")
     logger.info(f"Worker {node.gateway.id} collected {len(ids)} test(s)")
-
-
-def pytest_xdist_auto_num_workers(config):
-    """
-    Called to determine the number of workers for -n auto.
-    - Logs the hook call.
-    - Correct, though you do not return a value (default behavior).
-    """
-    logger.info("HOOK: pytest_xdist_auto_num_workers")
-
-
-def pytest_xdist_make_scheduler(config, log):
-    """
-    Called to create a custom test scheduler.
-    - Logs the hook call and returns None to use the default scheduler.
-    - Correct, and returning None is the default/safe option.
-    """
-    logger.info("HOOK: pytest_xdist_make_scheduler")
-    # Return None to use default LoadScheduling
-    return None
 
 
 # ============================================================================

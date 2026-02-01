@@ -1,4 +1,4 @@
-<!-- Test Distribution by Center Chart Component -->
+<!-- Distribution by Center Chart Component -->
 <div class="chart-container">
     <canvas id="centerChart" width="360" height="288"></canvas>
 </div>
@@ -48,6 +48,13 @@ function initializeCenterChart() {
         options: {
             responsive: false,
             plugins: {
+                title: {
+                    display: true,
+                    text: 'Distribution by Center',
+                    font: { size: 16, weight: 'bold' },
+                    color: '#212121',
+                    padding: { top: 0, bottom: 12 }
+                },
                 legend: {
                     display: true,
                     position: 'right',

@@ -1,4 +1,4 @@
-<!-- Test Status by Phase Chart Component -->
+<!-- Status by Phase Chart Component -->
 <div class="chart-container">
     <canvas id="statusByPhaseChart" width="360" height="288"></canvas>
 </div>
@@ -68,9 +68,11 @@ function initializePhaseChart() {
                     display: true,
                     position: 'top',
                     align: 'center',
+                    margin: 0,
                     labels: {
-                        font: { size: 14 },
+                        font: { size: 10 },
                         usePointStyle: true,
+                        boxHeight: 12,
                         pointStyle: 'rect',
                         generateLabels: function(chart) {
                             return chart.data.datasets.map((ds, i) => {
@@ -81,6 +83,7 @@ function initializePhaseChart() {
                                     fillStyle: color,
                                     strokeStyle: color,
                                     lineWidth: 1,
+                                    pointStyle: 'rect',
                                     hidden: false,
                                     index: i
                                 };
@@ -88,7 +91,7 @@ function initializePhaseChart() {
                         }
                     }
                 },
-                title: { display: true, text: 'Test Status by Phase', font: { size: 18 } }
+                title: { display: true, text: 'Status by Phase', font: { size: 18 }, padding: { top: 0, bottom: 4 } }
             },
             scales: {
                 x: {
