@@ -2,17 +2,17 @@ import logging
 import time
 
 import pytest
-from src.utils.TemplateHelper import profile_name_from_driver, get_env
+from src.utils.RoboTemplateHelper import profile_name_from_driver, get_env
 
 logger = logging.getLogger(__name__)
 
 
-@pytest.mark.datafile("BrowserTitle.csv")
+@pytest.mark.datafile("TestData.csv")
 def test_open_google_with_unique_profile(row, driver, wait):
     """Test case to open Google using a unique Chrome profile."""
 
     title = row.get("Title", "")
-    logger.info(f"Running with BrowserTitle row: {row}")
+    logger.info(f"Running with TestData row: {row}")
     if title:
         logger.info(f"Using title: {title}")
 
@@ -23,9 +23,9 @@ def test_open_google_with_unique_profile(row, driver, wait):
     logger.info(f"Profile Name from driver: {profile_name_from_driver(driver)}")
 
     # Measure connection time
-    url = get_env("Ajaj_URL")
+    url = get_env("APP_URL")
     if url is None or url.strip() == "":
-        assert False, "Ajaj_URL environment variable is not set."
+        assert False, "APP_URL environment variable is not set."
 
     logger.info(f"Opening {url}")
     start_time = time.time()
@@ -52,3 +52,11 @@ def test_open_google_with_unique_profile(row, driver, wait):
     logger.info(f"✓ Connection Time: {connection_time:.2f} seconds")
     logger.info(f"✓ Profile Used: {profile_name_from_driver(driver)}")
     logger.info(f"{'='*70}")
+
+    value_1 = row.get("Value 1", None)
+    value_2 = row.get("Value 2", None)
+    assert value_1 is not None, "Value 1 should not be None"
+    assert value_2 is not None, "Value 2 should not be None"
+    if value_1 > value_2:
+        pytest.skip("Skipping due to some_condition")
+    assert value_1 == value_2, "Value 1 and Value 2 should be same"

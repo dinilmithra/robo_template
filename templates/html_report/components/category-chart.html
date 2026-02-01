@@ -1,0 +1,130 @@
+<!-- Test Status by Request Category Chart Component -->
+<div class="chart-container">
+    <canvas id="statusByCategoryChart" width="360" height="288"></canvas>
+</div>
+<script>
+function initializeCategoryChart() {
+    const ctx = document.getElementById('statusByCategoryChart');
+    if (!ctx) {
+        setTimeout(initializeCategoryChart, 100);
+        return;
+    }
+    
+    if (typeof window.statusColors === 'undefined' || typeof window.add3DEffect === 'undefined') {
+        setTimeout(initializeCategoryChart, 100);
+        return;
+    }
+
+    const allResults = window.allResultsData || [];
+    const statusTypes = window.statusTypes || ['PASSED', 'FAILED', 'SKIPPED'];
+    const statusColors = window.statusColors;
+    const add3DEffect = window.add3DEffect;
+
+    const categorySet = new Set();
+    allResults.forEach(r => {
+        if (r.category && r.category !== '-') categorySet.add(r.category);
+    });
+    const categoryLabels = Array.from(categorySet);
+
+    const statusByCategory = {};
+    allResults.forEach(r => {
+        const category = r.category;
+        let status = (r.status || '').toUpperCase();
+        if (status === 'ERROR') status = 'FAILED';
+        if (!category || category === '-' || !statusTypes.includes(status)) return;
+        if (!statusByCategory[category]) statusByCategory[category] = { PASSED: 0, FAILED: 0, SKIPPED: 0 };
+        if (statusByCategory[category][status] !== undefined) statusByCategory[category][status]++;
+    });
+
+    const categoryDatasets = statusTypes.map(st => ({
+        label: st.charAt(0) + st.slice(1).toLowerCase(),
+        data: categoryLabels.map(c => (statusByCategory[c] ? statusByCategory[c][st] : 0)),
+        backgroundColor: statusColors[st],
+        borderWidth: 1
+    }));
+
+    const ctxObj = ctx.getContext('2d');
+    const cat3dDatasets = categoryDatasets.map(ds => ({
+        ...ds,
+        backgroundColor: add3DEffect(ctxObj, 'bar', [statusColors[ds.label.toUpperCase()]])
+    }));
+
+    // Destroy existing chart instance if it exists
+    const existingChart = Chart.getChart('statusByCategoryChart');
+    if (existingChart) {
+        existingChart.destroy();
+    }
+
+    new Chart(ctxObj, {
+        type: 'bar',
+        data: {
+            labels: categoryLabels,
+            datasets: cat3dDatasets
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                    align: 'center',
+                    labels: {
+                        font: { size: 14 },
+                        usePointStyle: true,
+                        pointStyle: 'rect',
+                        generateLabels: function(chart) {
+                            return chart.data.datasets.map((ds, i) => {
+                                const label = ds.label;
+                                const color = statusColors[label.toUpperCase()] || '#888';
+                                return {
+                                    text: label,
+                                    fillStyle: color,
+                                    strokeStyle: color,
+                                    lineWidth: 1,
+                                    hidden: false,
+                                    index: i
+                                };
+                            });
+                        }
+                    }
+                },
+                title: { display: true, text: 'Test Status by Request Category', font: { size: 18 } }
+            },
+            scales: {
+                x: {
+                    stacked: true,
+                    title: {
+                        display: true,
+                        text: 'Test Cases',
+                        font: { size: 12, weight: 'bold' },
+                        color: '#212121'
+                    },
+                    ticks: {
+                        font: { size: 10, weight: 'bold' },
+                        color: '#212121',
+                        stepSize: 1,
+                        callback: function(value) {
+                            if (Number.isInteger(value)) return value;
+                            return '';
+                        }
+                    }
+                },
+                y: {
+                    stacked: true,
+                    title: { display: false },
+                    ticks: {
+                        font: { size: 10, weight: 'bold' },
+                        color: '#212121',
+                        stepSize: 1,
+                        callback: function(value, index, ticks) {
+                            return categoryLabels && categoryLabels[index] ? categoryLabels[index] : value;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+document.addEventListener('DOMContentLoaded', () => setTimeout(initializeCategoryChart, 50));
+</script>

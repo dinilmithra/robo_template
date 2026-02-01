@@ -1,0 +1,130 @@
+<!-- Test Status by Phase Chart Component -->
+<div class="chart-container">
+    <canvas id="statusByPhaseChart" width="360" height="288"></canvas>
+</div>
+<script>
+function initializePhaseChart() {
+    const ctx = document.getElementById('statusByPhaseChart');
+    if (!ctx) {
+        setTimeout(initializePhaseChart, 100);
+        return;
+    }
+    
+    if (typeof window.statusColors === 'undefined' || typeof window.add3DEffect === 'undefined') {
+        setTimeout(initializePhaseChart, 100);
+        return;
+    }
+
+    const allResults = window.allResultsData || [];
+    const statusTypes = window.statusTypes || ['PASSED', 'FAILED', 'SKIPPED'];
+    const statusColors = window.statusColors;
+    const add3DEffect = window.add3DEffect;
+
+    const phaseSet = new Set();
+    allResults.forEach(r => {
+        if (r.phase && r.phase !== '-') phaseSet.add(r.phase);
+    });
+    const phaseLabels = Array.from(phaseSet);
+
+    const statusByPhase = {};
+    allResults.forEach(r => {
+        const phase = r.phase;
+        let status = (r.status || '').toUpperCase();
+        if (status === 'ERROR') status = 'FAILED';
+        if (!phase || phase === '-' || !statusTypes.includes(status)) return;
+        if (!statusByPhase[phase]) statusByPhase[phase] = { PASSED: 0, FAILED: 0, SKIPPED: 0 };
+        if (statusByPhase[phase][status] !== undefined) statusByPhase[phase][status]++;
+    });
+
+    const phaseDatasets = statusTypes.map(st => ({
+        label: st.charAt(0) + st.slice(1).toLowerCase(),
+        data: phaseLabels.map(p => (statusByPhase[p] ? statusByPhase[p][st] : 0)),
+        backgroundColor: statusColors[st],
+        borderWidth: 1
+    }));
+
+    const ctxObj = ctx.getContext('2d');
+    const phase3dDatasets = phaseDatasets.map(ds => ({
+        ...ds,
+        backgroundColor: add3DEffect(ctxObj, 'bar', [statusColors[ds.label.toUpperCase()]])
+    }));
+
+    // Destroy existing chart instance if it exists
+    const existingChart = Chart.getChart('statusByPhaseChart');
+    if (existingChart) {
+        existingChart.destroy();
+    }
+
+    new Chart(ctxObj, {
+        type: 'bar',
+        data: {
+            labels: phaseLabels,
+            datasets: phase3dDatasets
+        },
+        options: {
+            responsive: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                    align: 'center',
+                    labels: {
+                        font: { size: 14 },
+                        usePointStyle: true,
+                        pointStyle: 'rect',
+                        generateLabels: function(chart) {
+                            return chart.data.datasets.map((ds, i) => {
+                                const label = ds.label;
+                                const color = statusColors[label.toUpperCase()] || '#888';
+                                return {
+                                    text: label,
+                                    fillStyle: color,
+                                    strokeStyle: color,
+                                    lineWidth: 1,
+                                    hidden: false,
+                                    index: i
+                                };
+                            });
+                        }
+                    }
+                },
+                title: { display: true, text: 'Test Status by Phase', font: { size: 18 } }
+            },
+            scales: {
+                x: {
+                    stacked: true,
+                    title: { display: false },
+                    ticks: {
+                        font: { size: 10, weight: 'bold' },
+                        color: '#212121',
+                        stepSize: 1,
+                        callback: function(value, index) {
+                            return phaseLabels && phaseLabels[index] ? phaseLabels[index] : value;
+                        }
+                    }
+                },
+                y: {
+                    stacked: true,
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Test Cases',
+                        font: { size: 12, weight: 'bold' },
+                        color: '#212121'
+                    },
+                    ticks: {
+                        font: { size: 10, weight: 'bold' },
+                        color: '#212121',
+                        stepSize: 1,
+                        callback: function(value) {
+                            if (Number.isInteger(value)) return value;
+                            return '';
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+document.addEventListener('DOMContentLoaded', () => setTimeout(initializePhaseChart, 50));
+</script>

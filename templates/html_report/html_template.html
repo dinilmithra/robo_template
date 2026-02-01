@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>{{ summary.project_name }} {{ report_title }} - ( {{ summary.environment }} )</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:400,500,700&display=swap">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="../templates/html_report/scripts/css/report.css">
+</head>
+</head>
+
+<body>
+    <div class="dashboard-container">
+        <div>
+            <div class="dashboard-header">
+                <div class="dashboard-title">{{ summary.project_name }} {{ report_title }} - ( {{ summary.environment }}
+                    ) </div>
+            </div>
+
+            <div class="charts-row">
+                <!-- Test Results Summary Chart Component -->
+                {% include "./components/summary-chart.html" %}
+                <!-- Test Distribution by Center Chart Component -->
+                {% include "./components/center-chart.html" %}
+                <!-- Test Status by Phase Chart Component -->
+                {% include "./components/phase-chart.html" %}
+                <!-- Test Status by Request Category Chart Component -->
+                {% include "./components/category-chart.html" %}
+                <!-- Test Status by Center Chart Component -->
+                {% include "./components/status-center-chart.html" %}
+            </div>
+            <div class="execution-summary">
+                {% set has_passed = all_results|selectattr('test_status', 'equalto', 'PASSED')|list|length > 0 %}
+                {% set has_failed = all_results|selectattr('test_status', 'equalto', 'FAILED')|list|length > 0 or
+                all_results|selectattr('test_status', 'equalto', 'ERROR')|list|length > 0 %}
+                {% set has_skipped = all_results|selectattr('test_status', 'equalto', 'SKIPPED')|list|length > 0 %}
+                <span class="execution-label">
+                    {% if has_passed %}
+                    <input type="checkbox" class="status-filter" value="PASSED" checked>
+                    <label for="status-passed" class="passed">PASSED</label>
+                    {% endif %}
+                    {% if has_failed %}
+                    <input type="checkbox" class="status-filter" value="FAILED" checked>
+                    <label for="status-failed" class="failed">FAILED</label>
+                    {% endif %}
+                    {% if has_skipped %}
+                    <input type="checkbox" class="status-filter" value="SKIPPED" checked>
+                    <label for="status-skipped" class="skipped">SKIPPED</label>
+                    {% endif %}
+                </span>
+                <input type="text" class="filter-input" id="resultsTableFilter" placeholder="Filter results...">
+                <span class="execution-details">
+                    Executed <span class="execution-count">{{ summary.total }}</span> test cases in <span
+                        class="execution-count">{{ summary.duration }}</span> (HH:MM:SS)
+                </span>
+            </div>
+        </div>
+        <table class="results-table" id="resultsTable">
+            <thead>
+                <tr>
+                    <th class="row_number" data-column-type="row_number">#</th>
+                    <th class="sortable test_status" data-column-type="test_status">Status
+                    </th>
+                    <th class="sortable title" data-column-type="title">Title
+                    </th>
+                    <th class="sortable row_name" data-column-type="row_name">Row Name
+                    </th>
+                    <th class="sortable phase" data-column-type="phase">Phase
+                    </th>
+                    <th class="sortable request_category" data-column-type="request_category">Request Category
+                    </th>
+                    <th class="sortable request_sub_category" data-column-type="request_sub_category">Request Sub
+                        Category
+                    </th>
+                    <th class="sortable center" data-column-type="center">Center
+                    </th>
+
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in all_results %}
+                <tr data-test-name="{{ row.title|e }}" data-outcome="{{ row.test_status|e }}"
+                    data-error="{{ row.error_log|e }}">
+                    <td>{{ loop.index }}</td>
+                    <td class="status-{{ row.test_status|lower|replace('error','failed') }}">
+                        {{ row.test_status|replace('ERROR', 'FAILED') }}
+                    </td>
+                    <td>{{ row.title or 'N/A' }}</td>
+                    <td>{{ row['Row Name'] or 'N/A' }}</td>
+                    <td>{{ row['Phase'] or 'N/A' }}</td>
+                    <td>{{ row['Request Category'] or 'N/A' }}</td>
+                    <td>{{ row['Request Sub Category'] or 'N/A' }}</td>
+                    <td>{{ row['Center'] or 'N/A' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <!-- Error Modal Markup -->
+        <div id="errorModal" class="error-modal">
+            <div id="errorModalContent" class="error-modal-content">
+                <div class="error-modal-header">
+                    <span id="errorModalTitle" class="error-modal-title"></span>
+                    <div class="error-modal-controls">
+                        <!-- Material Icons Expand/Minimize Buttons -->
+                        <span id="expandIcon" class="modal-header-icon material-icons" title="Maximize"
+                            onclick="toggleFullscreen()">open_in_full</span>
+                        <span id="minimizeIcon" class="modal-header-icon material-icons" title="Minimize"
+                            style="display:none;" onclick="toggleFullscreen()">minimize</span>
+                        <button class="modal-header-icon error-modal-btn" title="Close"
+                            onclick="closeErrorModal()">&times;</button>
+                    </div>
+                </div>
+                <div id="errorModalBody">
+                    <div id="errorMessage" class="error-message"></div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            window.allResultsData = [
+                {% for result in all_results %}
+            {
+                center: `{{ result.Center|e }}`,
+                    status: `{{ result.test_status|e }}`,
+                        phase: `{{ result.Phase|e }}`,
+                            category: `{{ result['Request Category']|e }}`
+            }
+            {% if not loop.last %}, {% endif %} {% endfor %}
+                        ];
+
+            // Order: [Passed, Failed, Skipped]
+            window.summaryData = [
+                {{ summary.passed if summary.passed is defined else 0 }},
+                {{ summary.failed if summary.failed is defined else 0 }},
+                {{ summary.skipped if summary.skipped is defined else 0 }}
+            ];
+        </script>
+        <!-- Main Report Charts Script -->
+        <script src="../templates/html_report/scripts/js/report.js"></script>
+        <!-- // Simple table sort for .results-table -->
+        <script src="../templates/html_report/scripts/js/table-sort.js"></script>
+</body>
+<footer class="report-footer">
+    This report was generated by <strong>{{ summary.test_framework }}</strong> on <strong>{{ summary.generated_date
+        }}</strong> at <strong>{{ summary.generated_time }}</strong>.
+</footer>
+</body>
+
+</html>

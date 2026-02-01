@@ -1,0 +1,79 @@
+<!-- Test Distribution by Center Chart Component -->
+<div class="chart-container">
+    <canvas id="centerChart" width="360" height="288"></canvas>
+</div>
+<script>
+function initializeCenterChart() {
+    const ctx = document.getElementById('centerChart');
+    if (!ctx) {
+        setTimeout(initializeCenterChart, 100);
+        return;
+    }
+    
+    if (typeof window.centerPalette === 'undefined' || typeof window.add3DEffect === 'undefined') {
+        setTimeout(initializeCenterChart, 100);
+        return;
+    }
+    
+    const allResults = window.allResultsData || [];
+    const centerCounts = {};
+    allResults.forEach(r => {
+        if (r.center && r.center !== '-') {
+            centerCounts[r.center] = (centerCounts[r.center] || 0) + 1;
+        }
+    });
+    const centerLabels = Object.keys(centerCounts);
+    const centerData = centerLabels.map(c => centerCounts[c]);
+    
+    // Destroy existing chart instance if it exists
+    const existingChart = Chart.getChart('centerChart');
+    if (existingChart) {
+        existingChart.destroy();
+    }
+    
+    const ctxObj = ctx.getContext('2d');
+    const centerColors = window.centerPalette.slice(0, centerLabels.length);
+    const center3dDatasets = [{
+        data: centerData,
+        backgroundColor: window.add3DEffect(ctxObj, 'doughnut', centerColors),
+        borderWidth: 1
+    }];
+    
+    new Chart(ctxObj, {
+        type: 'doughnut',
+        data: {
+            labels: centerLabels,
+            datasets: center3dDatasets
+        },
+        options: {
+            responsive: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'right',
+                    align: 'center',
+                    labels: {
+                        font: { size: 14 },
+                        usePointStyle: true,
+                        pointStyle: 'circle',
+                        generateLabels: function(chart) {
+                            const data = chart.data;
+                            return data.labels.map((label, i) => {
+                                return {
+                                    text: label,
+                                    fillStyle: centerColors[i],
+                                    strokeStyle: centerColors[i],
+                                    lineWidth: 1,
+                                    hidden: false,
+                                    index: i
+                                };
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+document.addEventListener('DOMContentLoaded', () => setTimeout(initializeCenterChart, 50));
+</script>

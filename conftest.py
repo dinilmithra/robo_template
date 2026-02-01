@@ -1,3 +1,9 @@
+"""
+Global variables for pytest-xdist result aggregation
+"""
+
+test_results_summary = []  # List to collect test result objects (main process)
+_MASTER_CONFIG = None  # Global reference to master config for xdist aggregation
 from datetime import datetime
 import logging
 import os
@@ -12,26 +18,31 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 
 from selenium.webdriver.support.ui import WebDriverWait
-from src.utils.TemplateHelper import get_excel_rows, get_env
+from src.utils.RoboTemplateHelper import (
+    get_excel_rows,
+    get_env,
+    extract_test_case_name_from_docstring,
+    print_results_summary,
+    flatten_results,
+)
+from src.utils.reports.HtmlReportUtils import generate_and_save_html_report
 
 # Load environment variables from .env file
 load_dotenv()
 
-# ============================================================================
-# Global State for Tracking Online Proxies
-# ============================================================================
-
-online_proxies = []
 
 # ============================================================================
 # Logger Configuration
 # ============================================================================
 
+
 # Get logger - pytest will configure it based on pytest.ini [logging] section
 logger = logging.getLogger(__name__)
 
+
 # Ensure logger propagates to root logger so pytest can capture it
 logger.propagate = True
+
 
 # ============================================================================
 # Pytest Hooks
@@ -103,6 +114,17 @@ logger.propagate = True
 # ============================================================================
 
 
+# Add custom CLI option for log level
+def pytest_addoption(parser):
+    # parser.addoption(
+    #     "--log-cli-level",
+    #     action="store",
+    #     default="ERROR",
+    #     help="Set log level for custom logger (overrides LOG_LEVEL env variable)",
+    # )
+    pass
+
+
 def pytest_configure(config):
     """
     Called after command line options have been parsed and all plugins and initial conftest files loaded.
@@ -119,6 +141,19 @@ def pytest_configure(config):
         f"Test session started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
     )
     logger.info("=" * 70)
+
+    # Store session start time for HTML report duration calculation (only in master process)
+    if not hasattr(config, "workerinput") and not hasattr(config, "_sessionstart_time"):
+        config._sessionstart_time = datetime.now()
+
+    # Always initialize test_results_summary on config for both master and workers
+    # Always initialize test_results_summary for all configs (master and workers)
+    config.test_results_summary = []
+
+    # Store master config in global for xdist aggregation
+    global _MASTER_CONFIG
+    if not hasattr(config, "workerinput"):
+        _MASTER_CONFIG = config
 
 
 def pytest_sessionstart(session):
@@ -146,7 +181,7 @@ def pytest_plugin_registered(plugin, manager):
     # Check if the registered plugin is the xdist dsession plugin
     if str(plugin).find("xdist.dsession.DSession") != -1:
         if parallel_disabled:
-            print("Debugger active, unregistering pytest-xdist")
+            logger.warning("Debugger active, unregistering pytest-xdist")
             manager.unregister(plugin)
 
 
@@ -176,7 +211,7 @@ def pytest_generate_tests(metafunc):
     rows = get_excel_rows(data_path)
     if not rows:
         pytest.fail(f"{csv_file} is missing or empty")
-    ids = [str(r.get("Sl No") or r.get("Title") or "row") for r in rows]
+    ids = [str(r.get("Row Name") or r.get("Title") or "row") for r in rows]
     metafunc.parametrize("row", rows, ids=ids)
 
 
@@ -227,17 +262,74 @@ def pytest_runtest_makereport(item, call):
     - Tracks online proxies for passed tests.
     - Useful for custom result handling and proxy tracking.
     """
-    if call.when == "call":
-        # Get the row fixture value if it exists
-        if "row" in item.fixturenames:
-            row_value = item.funcargs.get("row")
-            if row_value and call.excinfo is None:  # Test passed
-                online_proxies.append(row_value)
-                ip = row_value.get("IP Ajajress", "N/A")
-                connection_time = row_value.get("Connection Time (s)", "N/A")
-                logger.info(
-                    f"Tracked online proxy: {ip} (Connection time: {connection_time}s)"
-                )
+    if call.when != "call":
+        return
+
+    # Collect test result summary
+    row_name = title = phase = req_cat = req_sub_cat = center = "N/A"
+    if "row" in item.fixturenames:
+        row_value = item.funcargs.get("row", {})
+        row_name = row_value.get("Row Name", row_value.get("Row Name", "N/A"))
+        title = row_value.get("Title", "N/A")
+        phase = row_value.get("Phase", "N/A")
+        req_cat = row_value.get("Request Category", "N/A")
+        req_sub_cat = row_value.get("Request Sub Category", "N/A")
+        center = row_value.get("Center", "N/A")
+    else:
+        row_name = "N/A"
+        title = getattr(item, "name", item.nodeid)
+        phase = req_cat = req_sub_cat = center = "N/A"
+
+    # Determine test status and error log
+
+    if call.excinfo is None:
+        status = "PASSED"
+        error_log = ""
+    else:
+        # This gives the full traceback as a string (file, line, code, error)
+        error_log = call.excinfo.getrepr().reprcrash.message
+
+        if call.excinfo.typename == "Skipped":
+            status = "SKIPPED"
+        elif hasattr(call, "wasxfail") and call.wasxfail:
+            status = "RERUN"
+        else:
+            status = "ERROR"
+
+    # Optionally extract test_case_name if needed (if extract_test_case_name_from_docstring is used elsewhere)
+    test_case_name = None
+    try:
+        test_case_name = extract_test_case_name_from_docstring(item, None)
+    except Exception:
+        test_case_name = None
+
+    result = {
+        "test_status": status,
+        "test_case_name": test_case_name,
+        "title": title,
+        "Row Name": row_name,
+        "Phase": phase,
+        "Request Category": req_cat,
+        "Request Sub Category": req_sub_cat,
+        "Center": center,
+        "error_log": error_log,
+        "duration": getattr(call, "duration", None),
+    }
+
+    # Debug: print result being collected
+
+    # Attach result to report for use in pytest_runtest_logreport
+    # Only append to the correct collection once
+    if hasattr(item.config, "workerinput"):
+        # In worker process, store in config
+        item.config.test_results_summary.append(result)
+        # Always set workeroutput, even if empty
+        item.config.workeroutput["test_results_summary"] = list(
+            item.config.test_results_summary
+        )
+    else:
+        # In main process (no xdist), store in global
+        test_results_summary.append(result)
 
 
 def pytest_runtest_logreport(report):
@@ -250,23 +342,10 @@ def pytest_runtest_logreport(report):
     if report.when == "call":
         if report.passed:
             status = "✓ PASSED"
-            # Track successful proxy test - get the row data from fixture
-            if hasattr(report, "fixturename") or "row" in getattr(
-                report, "fixturenames", []
-            ):
-                try:
-                    if hasattr(report, "context"):
-                        row_data = report.context._row
-                        online_proxies.append(row_data)
-                        logger.info(
-                            f"Tracked online proxy: {row_data.get('IP Ajajress', 'N/A')}"
-                        )
-                except Exception as e:
-                    logger.debug(f"Could not track proxy from report: {e}")
         elif report.failed:
             status = "✗ FAILED"
         elif report.skipped:
-            status = "⊘ SKIjajED"
+            status = "⊘ SKIPPED"
         else:
             status = "? UNKNOWN"
         logger.info(f"[{status}] {report.nodeid}")
@@ -282,8 +361,57 @@ def pytest_sessionfinish(session, exitstatus):
     logger.info(f"{'Session Finish':^70}")
     logger.info(f"End time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     logger.info(f"Exit status: {exitstatus}")
-
     logger.info("=" * 70)
+
+
+def pytest_unconfigure(config):
+    """
+    Called after all teardown and xdist worker aggregation is complete.
+    Print the aggregated test results summary here.
+    """
+    # Only logger.warning in master process
+    if hasattr(config, "workerinput"):
+        return
+
+    all_results = []
+    # Always include results from config.test_results_summary (main process)
+    if hasattr(config, "test_results_summary") and config.test_results_summary:
+        all_results.extend(
+            [r for r in config.test_results_summary if isinstance(r, dict)]
+        )
+
+    # If still empty, include global test_results_summary (for single test case runs)
+    global test_results_summary
+    if not all_results and test_results_summary:
+        all_results.extend([r for r in test_results_summary if isinstance(r, dict)])
+
+    # Also include results from xdist workers if present
+    if (
+        hasattr(config, "_test_results_from_workers")
+        and config._test_results_from_workers
+    ):
+        for entry in config._test_results_from_workers:
+            if isinstance(entry, dict):
+                all_results.append(entry)
+            elif isinstance(entry, list):
+                all_results.extend([r for r in entry if isinstance(r, dict)])
+            # else branch intentionally left empty (no action needed)
+
+    # Place report in the 'report' folder at the project root (outside src)
+    project_root = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "..", "..")
+    )
+
+    print_results_summary(all_results)
+
+    start_time = getattr(config, "_sessionstart_time", None)
+
+    # Generate HTML report at the end of execution
+    try:
+        html_report_path = generate_and_save_html_report(all_results, start_time)
+        print(f"HTML report generated: {html_report_path}")
+    except Exception as e:
+        print(f"Failed to generate HTML report: {e}")
 
 
 # ============================================================================
@@ -293,45 +421,6 @@ def pytest_sessionfinish(session, exitstatus):
 
 # ============================================================================
 # Pytest-xdist Hooks
-# ============================================================================
-
-# Implemented Pytest-xdist Hooks
-
-#     1. pytest_xdist_setupnodes(config, specs)
-#         Called before any remote node is set up.
-#         You log the number of worker nodes being set up.
-#         ✅ Correct and useful for debugging parallel test setup.
-
-#     2. pytest_xdist_newgateway(gateway)
-#         Called when a new gateway (worker) is created.
-#         You log the creation of a new gateway.
-#         ✅ Correct and useful for tracking worker creation.
-
-#     3. pytest_configure_node(node)
-#         Called for configuring a worker node before it runs tests.
-#         You log the configuration of the worker node.
-#         ✅ Correct and useful for debugging worker configuration.
-
-#     4. pytest_testnodedown(node, error)
-#         Called when a worker node goes down.
-#         You log the node going down and any error.
-#         ✅ Correct and useful for monitoring node failures.
-
-#     5. pytest_xdist_node_collection_finished(node, ids)
-#         Called when a worker node finishes test collection.
-#         You log the number of tests collected by the worker.
-#         ✅ Correct and useful for tracking test distribution.
-
-#     6. pytest_xdist_auto_num_workers(config)
-#         Called to determine the number of workers for -n auto.
-#         You log the hook call.
-#         ✅ Correct, though you do not return a value (which is fine if you want default behavior).
-
-#     7. pytest_xdist_make_scheduler(config, log)
-#         Called to create a custom test scheduler.
-#         You log the hook call and return None to use the default scheduler.
-#         ✅ Correct, and returning None is the default/safe option.
-
 # ============================================================================
 
 
@@ -363,6 +452,8 @@ def pytest_configure_node(node):
     """
     logger.info("HOOK: pytest_configure_node")
     logger.info(f"Configuring worker node: {node.gateway.id}")
+    # Ensure test_results_summary is initialized for each worker config (required for xdist)
+    node.config.test_results_summary = []
 
 
 def pytest_testnodedown(node, error):
@@ -375,13 +466,21 @@ def pytest_testnodedown(node, error):
     logger.info(f"Worker node down: {node.gateway.id}")
     if error:
         logger.error(f"Node error: {error}")
+    # Use global _MASTER_CONFIG for aggregation
+    config = _MASTER_CONFIG
+    if config is None:
+        return
+    if not hasattr(config, "_test_results_from_workers"):
+        config._test_results_from_workers = []
+    results = node.workeroutput.get("test_results_summary", [])
+
+    flatten_results(results, config)
 
 
 def pytest_xdist_node_collection_finished(node, ids):
     """
     Called when a worker node finishes test collection.
     - Logs the number of tests collected by the worker.
-    - Correct and useful for tracking test distribution.
     """
     logger.info("HOOK: pytest_xdist_node_collection_finished")
     logger.info(f"Worker {node.gateway.id} collected {len(ids)} test(s)")
@@ -411,7 +510,6 @@ def pytest_xdist_make_scheduler(config, log):
 # End Pytest-xdist Hooks
 # ============================================================================
 
-
 # ============================================================================
 # Fixtures
 # ============================================================================
@@ -433,9 +531,9 @@ def driver(request):
     logger.info(f"Profile Directory: {profile_dir}")
 
     chrome_options = Options()
-    chrome_options.jaja_argument(f"--user-data-dir={profile_dir}")
-    chrome_options.jaja_argument("--no-sandbox")
-    chrome_options.jaja_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument(f"--user-data-dir={profile_dir}")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
 
     # Check HEADLESS environment variable (Y = headless, N = visible)
     headless = get_env("HEADLESS")
@@ -443,7 +541,7 @@ def driver(request):
         headless = "N"
     if headless.upper() == "Y":
         # Use --headless=new for Chrome 109+
-        chrome_options.jaja_argument("--headless=new")
+        chrome_options.add_argument("--headless=new")
         logger.info("[HEADLESS MODE ENABLED]")
     else:
         logger.info("[HEADLESS MODE DISABLED]")
@@ -471,7 +569,7 @@ def driver(request):
         logger.info(f"Cleaned up profile directory: {profile_dir}")
         logger.info(f"Teardown complete for profile: {profile_name}")
 
-    request.jajafinalizer(finalizer)
+    request.addfinalizer(finalizer)
 
     yield driver
 
