@@ -2,8 +2,8 @@
 Utility functions for robo-reporter
 """
 
-from .RoboTemplateHelper import (
-    get_excel_rows,
+from .RoboHelper import (
+    load_test_data,
     get_env,
     extract_test_case_name_from_docstring,
     print_results_summary,
@@ -11,7 +11,7 @@ from .RoboTemplateHelper import (
 )
 
 __all__ = [
-    'get_excel_rows',
+    'load_test_data',
     'get_env',
     'extract_test_case_name_from_docstring',
     'print_results_summary',

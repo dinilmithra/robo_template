@@ -6,6 +6,11 @@ All fixtures and hooks are provided by the robo_reporter plugin
 import pytest
 from dotenv import load_dotenv
 
+
+import logging
+
+logger = logging.getLogger(__name__)
+
 # Load environment variables from .env file
 load_dotenv()
 
@@ -20,6 +25,7 @@ load_dotenv()
 # ============================================================================
 # Report Summary Hook
 # ============================================================================
+
 
 def robo_report_summary(config, report_summary, report_rows):
     """
@@ -41,61 +47,63 @@ def robo_report_summary(config, report_summary, report_rows):
         Modified report_summary dictionary
     """
     # Example: Add custom metrics based on test data
-    
-    # Calculate pass rate percentage
-    total = report_summary.get('total', 0)
-    passed = report_summary.get('passed', 0)
-    pass_rate = (passed / total * 100) if total > 0 else 0.0
-    report_summary['pass_rate'] = f"{pass_rate:.1f}%"
-    
-    # Count tests by phase
-    phases = {}
-    for row in report_rows:
-        phase = row.get('Phase', 'Unknown')
-        if phase not in phases:
-            phases[phase] = {'total': 0, 'passed': 0, 'failed': 0}
-        phases[phase]['total'] += 1
-        
-        status = row.get('test_status', '')
-        if status == 'PASSED':
-            phases[phase]['passed'] += 1
-        elif status in ['ERROR', 'FAILED']:
-            phases[phase]['failed'] += 1
-    
-    report_summary['phases'] = phases
-    
-    # Count tests by request category
-    categories = {}
-    for row in report_rows:
-        category = row.get('Request Category', 'Unknown')
-        if category not in categories:
-            categories[category] = {'total': 0, 'passed': 0}
-        categories[category]['total'] += 1
-        
-        if row.get('test_status') == 'PASSED':
-            categories[category]['passed'] += 1
-    
-    report_summary['categories'] = categories
-    
-    # Count tests by center
-    centers = {}
-    for row in report_rows:
-        center = row.get('Center', 'Unknown')
-        if center not in centers:
-            centers[center] = {'total': 0, 'passed': 0}
-        centers[center]['total'] += 1
-        
-        if row.get('test_status') == 'PASSED':
-            centers[center]['passed'] += 1
-    
-    report_summary['centers'] = centers
-    
-    return report_summary
+
+    # # Calculate pass rate percentage
+    # total = report_summary.get('total', 0)
+    # passed = report_summary.get('passed', 0)
+    # pass_rate = (passed / total * 100) if total > 0 else 0.0
+    # report_summary['pass_rate'] = f"{pass_rate:.1f}%"
+
+    # # Count tests by phase
+    # phases = {}
+    # for row in report_rows:
+    #     phase = row.get('Phase', 'Unknown')
+    #     if phase not in phases:
+    #         phases[phase] = {'total': 0, 'passed': 0, 'failed': 0}
+    #     phases[phase]['total'] += 1
+
+    #     status = row.get('test_status', '')
+    #     if status == 'PASSED':
+    #         phases[phase]['passed'] += 1
+    #     elif status in ['ERROR', 'FAILED']:
+    #         phases[phase]['failed'] += 1
+
+    # report_summary['phases'] = phases
+
+    # # Count tests by request category
+    # categories = {}
+    # for row in report_rows:
+    #     category = row.get('Request Category', 'Unknown')
+    #     if category not in categories:
+    #         categories[category] = {'total': 0, 'passed': 0}
+    #     categories[category]['total'] += 1
+
+    #     if row.get('test_status') == 'PASSED':
+    #         categories[category]['passed'] += 1
+
+    # report_summary['categories'] = categories
+
+    # # Count tests by center
+    # centers = {}
+    # for row in report_rows:
+    #     center = row.get('Center', 'Unknown')
+    #     if center not in centers:
+    #         centers[center] = {'total': 0, 'passed': 0}
+    #     centers[center]['total'] += 1
+
+    #     if row.get('test_status') == 'PASSED':
+    #         centers[center]['passed'] += 1
+
+    # report_summary['centers'] = centers
+
+    # return report_summary
+    pass
 
 
 # ============================================================================
 # Report Rows Hook
 # ============================================================================
+
 
 def robo_report_rows(config, report_rows):
     """
@@ -118,20 +126,92 @@ def robo_report_rows(config, report_rows):
         # Filter to show only failed tests:
         # failed_tests = [r for r in report_rows if r.get('test_status') in ['ERROR', 'FAILED']]
         # return failed_tests
-        
+
         # Add custom field to each result:
         # for row in report_rows:
         #     row['custom_id'] = row.get('test_name', '').split('::')[-1]
         # return report_rows
-        
+
         # Sort by phase then status:
         # return sorted(report_rows, key=lambda r: (r.get('Phase', ''), r.get('test_status', '')))
     """
-    # Example: Add custom ID field based on test name
-    for row in report_rows:
-        test_name = row.get('test_name', '')
-        # Extract the parametrized part if present
-        test_id = test_name.split('[')[1].rstrip(']') if '[' in test_name else test_name.split('::')[-1]
-        row['custom_test_id'] = test_id
-    
-    return report_rows
+    # # Example: Add custom ID field based on test name
+    # for row in report_rows:
+    #     test_name = row.get('test_name', '')
+    #     # Extract the parametrized part if present
+    #     test_id = test_name.split('[')[1].rstrip(']') if '[' in test_name else test_name.split('::')[-1]
+    #     row['custom_test_id'] = test_id
+
+    # return report_rows
+    pass
+
+
+# ============================================================================
+# Load Test Data Hook
+# ============================================================================
+
+def robo_load_test_data(data_path):
+    """
+    Override test data loading logic with custom implementation.
+
+    This hook is called by robo_template plugin to allow source projects to:
+    - Load from custom sources (database, API, etc.)
+    - Use alternative file formats
+    - Apply custom parsing logic
+    - Cache or preprocess data
+
+    Args:
+        data_path: Path object pointing to the data file
+
+    Returns:
+        List of dict rows for parametrization, or None to use default loader
+
+    Examples:
+        # Load from JSON file instead of CSV:
+        # import json
+        # if str(data_path).endswith('.json'):
+        #     with open(data_path) as f:
+        #         return json.load(f)
+        # return None  # Fall back to default
+
+        # Load from database:
+        # import sqlite3
+        # conn = sqlite3.connect('tests.db')
+        # cursor = conn.cursor()
+        # cursor.execute('SELECT * FROM test_data WHERE file = ?', (str(data_path),))
+        # columns = [desc[0] for desc in cursor.description]
+        # return [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+        # Load from custom source with preprocessing:
+        # rows = your_custom_loader(data_path)
+        # for row in rows:
+        #     row['preprocessed'] = True
+        # return rows
+    """
+    # Example: Add custom preprocessing to loaded data
+    # In this example, we still use the default loader but add preprocessing
+
+    # You could add custom logic here, for example:
+    # - Check if file should be loaded from database instead
+    # - Apply data transformations
+    # - Add custom fields
+    # - Filter rows based on environment
+
+    # For now, return None to use the default CSV/Excel loader
+    # To use custom loading, return a list of dicts instead
+
+    # Example: Log which file is being loaded
+    logger.debug(f"Loading test data from: {data_path}")
+
+    # Uncomment to use custom loading logic:
+    # if str(data_path).endswith('TestData.csv'):
+    #     # Your custom loading logic here
+    #     rows = [
+    #         {'Title': 'Custom Row 1', 'Phase': 'Smoke', 'Center': 'NYC'},
+    #         {'Title': 'Custom Row 2', 'Phase': 'Regression', 'Center': 'LA'}
+    #     ]
+    #     return rows
+
+    # Return None to use default load_test_data function
+    # return None
+    pass

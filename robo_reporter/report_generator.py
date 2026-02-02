@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
-from robo_reporter.utils.RoboTemplateHelper import get_env
+from robo_reporter.utils.RoboHelper import get_env
 from robo_reporter.utils.reports.HtmlReportUtils import get_html_template
 
 
@@ -179,7 +179,7 @@ def generate_report(report_rows, report_summary, start_time):
         css_path = scripts_dir / "css" / "report.css"
         css_content = css_path.read_text(encoding="utf-8") if css_path.exists() else ""
 
-        # Read JS files
+        # Read merged JS file
         report_js_path = scripts_dir / "js" / "report.js"
 
         report_js_content = (

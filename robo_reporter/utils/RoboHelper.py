@@ -23,11 +23,14 @@ def profile_name_from_driver(driver) -> str:
     return profile_name
 
 
-def get_excel_rows(path: Path):
-    """Load rows from the data file using pandas.
-    The file may be a true CSV (with various encodings) or an Excel workbook
-    stored with a .csv name. Returns a list of dict rows suitable for
-    parametrization.
+def load_test_data(path: Path):
+    """Load test data rows from CSV or Excel file using pandas.
+    
+    Supports multiple file formats and encodings:
+    - CSV files with utf-8-sig, latin-1, or utf-8 encoding
+    - Excel workbooks (.xlsx)
+    
+    Returns a list of dict rows suitable for pytest parametrization.
     """
 
     # Print to stderr to ensure visibility in xdist mode

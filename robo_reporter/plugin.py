@@ -11,6 +11,7 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
+from dotenv import load_dotenv
 import pytest
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -22,17 +23,20 @@ from .report_generator import (
     flatten_results,
     aggregate_test_results,
 )
-from .utils.RoboTemplateHelper import print_results_summary
-from .utils import get_env, get_excel_rows
+from .utils.RoboHelper import print_results_summary
+from .utils import get_env, load_test_data
 
 
 logger = logging.getLogger(__name__)
 logger.propagate = True
 
+# Load environment variables from .env file
+load_dotenv()
 
 # ============================================================================
 # Pytest Hook Specifications (for source projects to implement)
 # ============================================================================
+
 
 def robo_report_summary(config, report_summary, report_rows):
     """
@@ -85,11 +89,41 @@ def robo_report_rows(config, report_rows):
             # Filter to only show failed tests
             failed_tests = [r for r in report_rows if r.get('test_status') in ['ERROR', 'FAILED']]
             return failed_tests
-            
+
             # Or add custom fields to each result
             for row in report_rows:
                 row['custom_id'] = row.get('test_name', '').split('::')[-1]
             return report_rows
+    """
+    pass
+
+
+def robo_load_test_data(data_path):
+    """
+    Hook specification for source projects to override test data loading logic.
+
+    Source projects can implement this hook in their conftest.py to:
+    - Load data from custom sources (databases, APIs, etc.)
+    - Apply custom parsing/transformation logic
+    - Use different file formats or encodings
+    - Cache or preprocess data
+
+    Args:
+        data_path: Path object pointing to the data file
+
+    Returns:
+        List of dict rows suitable for parametrization, or None to use default loader
+
+    Example in source project's conftest.py:
+        def robo_load_test_data(data_path):
+            # Custom loading logic from database
+            if str(data_path).endswith('.json'):
+                import json
+                with open(data_path) as f:
+                    return json.load(f)
+
+            # Return None to fall back to default CSV/Excel loading
+            return None
     """
     pass
 
@@ -260,7 +294,19 @@ def pytest_generate_tests(metafunc):
     test_dir = Path(test_file_path).parent
     data_path = test_dir.parent / "data" / csv_file
 
-    rows = get_excel_rows(data_path)
+    # Allow source projects to override data loading logic via hook
+    rows = None
+    if hasattr(config.hook, "robo_load_test_data"):
+        hook_result = config.hook.robo_load_test_data(data_path=data_path)
+        if hook_result is not None:
+            rows = hook_result
+            logger.debug(
+                f"Test data loaded via robo_load_test_data hook: {len(rows)} rows"
+            )
+
+    # Fall back to default data loader if hook didn't provide rows
+    if not rows:
+        rows = load_test_data(data_path)
 
     if not rows:
         logger.error(
@@ -376,7 +422,11 @@ def pytest_testnodedown(node, error):
         return
 
     # Get worker ID from xdist WorkerController
-    worker_id = node.workerinput.get("workerid", "unknown") if hasattr(node, "workerinput") else "unknown"
+    worker_id = (
+        node.workerinput.get("workerid", "unknown")
+        if hasattr(node, "workerinput")
+        else "unknown"
+    )
 
     # Log if worker had an error
     if error:
@@ -425,7 +475,9 @@ def pytest_unconfigure(config):
 
     # Allow source projects to customize report_rows via hook
     if hasattr(config.hook, "robo_report_rows"):
-        hook_result = config.hook.robo_report_rows(config=config, report_rows=report_rows)
+        hook_result = config.hook.robo_report_rows(
+            config=config, report_rows=report_rows
+        )
         if hook_result is not None:
             report_rows = hook_result
             logger.debug("Report rows customized by source project hook")
