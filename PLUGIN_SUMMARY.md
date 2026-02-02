@@ -130,7 +130,7 @@ pytest
 ### Data Collection
 1. Hooks into `pytest_runtest_makereport` to collect:
    - Test status (PASSED/FAILED/SKIPPED)
-   - Test metadata (Row Name, Title, Phase, Category, etc.)
+   - Test metadata (Title, Phase, Category, etc.)
    - Error logs and tracebacks
    - Test duration
 

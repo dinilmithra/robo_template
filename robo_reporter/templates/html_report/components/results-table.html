@@ -1,9 +1,9 @@
 <!-- Results Table Component -->
 <div class="execution-summary">
-    {% set has_passed = all_results|selectattr('test_status', 'equalto', 'PASSED')|list|length > 0 %}
-    {% set has_failed = all_results|selectattr('test_status', 'equalto', 'FAILED')|list|length > 0 or
-    all_results|selectattr('test_status', 'equalto', 'ERROR')|list|length > 0 %}
-    {% set has_skipped = all_results|selectattr('test_status', 'equalto', 'SKIPPED')|list|length > 0 %}
+    {% set has_passed = report_rows|selectattr('test_status', 'equalto', 'PASSED')|list|length > 0 %}
+    {% set has_failed = report_rows|selectattr('test_status', 'equalto', 'FAILED')|list|length > 0 or
+    report_rows|selectattr('test_status', 'equalto', 'ERROR')|list|length > 0 %}
+    {% set has_skipped = report_rows|selectattr('test_status', 'equalto', 'SKIPPED')|list|length > 0 %}
     <span class="execution-label">
         {% if has_passed %}
         <input type="checkbox" class="status-filter" value="PASSED" checked>
@@ -30,8 +30,7 @@
         <tr>
             <th class="row_number" data-column-type="row_number">#</th>
             <th class="sortable test_status" data-column-type="test_status">Status</th>
-            <th class="sortable title" data-column-type="title">Title</th>
-            <th class="sortable row_name" data-column-type="row_name">Row Name</th>
+            <th class="sortable title" data-column-type="title">Title</th> 
             <th class="sortable phase" data-column-type="phase">Phase</th>
             <th class="sortable request_category" data-column-type="request_category">Request Category</th>
             <th class="sortable request_sub_category" data-column-type="request_sub_category">Request Sub Category</th>
@@ -39,15 +38,14 @@
         </tr>
     </thead>
     <tbody>
-        {% for row in all_results %}
+        {% for row in report_rows %}
         <tr data-test-name="{{ row.title|e }}" data-outcome="{{ row.test_status|e }}"
             data-error="{{ row.error_log|e }}">
             <td>{{ loop.index }}</td>
             <td class="status-{{ row.test_status|lower|replace('error','failed') }}">
                 {{ row.test_status|replace('ERROR', 'FAILED') }}
             </td>
-            <td>{{ row.title or '' }}</td>
-            <td>{{ row['Row Name'] or '' }}</td>
+            <td>{{ row.title or '' }}</td> 
             <td>{{ row['Phase'] or '' }}</td>
             <td>{{ row['Request Category'] or '' }}</td>
             <td>{{ row['Request Sub Category'] or '' }}</td>

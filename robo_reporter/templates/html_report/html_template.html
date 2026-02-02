@@ -36,7 +36,7 @@
 
             <script>
                 window.allResultsData = [
-                    {% for result in all_results %}
+                    {% for result in report_rows %}
                 {
                     center: `{{ result.Center|e }}`,
                         status: `{{ result.test_status|e }}`,

@@ -64,9 +64,7 @@
                     <th class="sortable test_status" data-column-type="test_status">Status
                     </th>
                     <th class="sortable title" data-column-type="title">Title
-                    </th>
-                    <th class="sortable row_name" data-column-type="row_name">Row Name
-                    </th>
+                    </th> 
                     <th class="sortable phase" data-column-type="phase">Phase
                     </th>
                     <th class="sortable request_category" data-column-type="request_category">Request Category
@@ -87,8 +85,7 @@
                     <td class="status-{{ row.test_status|lower|replace('error','failed') }}">
                         {{ row.test_status|replace('ERROR', 'FAILED') }}
                     </td>
-                    <td>{{ row.title or '' }}</td>
-                    <td>{{ row['Row Name'] or '' }}</td>
+                    <td>{{ row.title or '' }}</td> 
                     <td>{{ row['Phase'] or '' }}</td>
                     <td>{{ row['Request Category'] or '' }}</td>
                     <td>{{ row['Request Sub Category'] or '' }}</td>

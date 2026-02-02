@@ -3,6 +3,11 @@ from .reports.HtmlReportUtils import generate_html_report
 from pathlib import Path
 import zipfile
 import os
+import logging
+
+
+logger = logging.getLogger(__name__)
+logger.propagate = True
 
 
 def profile_name_from_driver(driver) -> str:
@@ -12,35 +17,35 @@ def profile_name_from_driver(driver) -> str:
     for arg in driver.options.arguments:
         if arg.startswith("--user-data-dir="):
             profile_dir = arg.split("=", 1)[1]
-            import os
-
             profile_name = os.path.basename(profile_dir)
             break
 
     return profile_name
 
 
-def get_excel_rows(path: Path, logger=None):
+def get_excel_rows(path: Path):
     """Load rows from the data file using pandas.
     The file may be a true CSV (with various encodings) or an Excel workbook
     stored with a .csv name. Returns a list of dict rows suitable for
     parametrization.
     """
-    # Use logging module if logger not provided
-    if logger is None:
-        import logging
-
-        logger = logging.getLogger(__name__)
 
     # Print to stderr to ensure visibility in xdist mode
     import sys
 
-    print(f"Loading data file: {path}", file=sys.stderr)
+    logger.info(f"Loading data file: {path}" )
+
+    # Validate file exists
+    if not os.path.exists(path):
+        logger.error(f"Data file not found: {path}")
+        return []
 
     try:
         import pandas as pd
     except ImportError:
+        logger.error("pandas not installed; cannot load data file")
         return []
+
     try:
         if zipfile.is_zipfile(path):
             df = pd.read_excel(
@@ -48,26 +53,24 @@ def get_excel_rows(path: Path, logger=None):
             )
         else:
             df = None
-            for enc in ("utf-8-sig", "latin-1"):
+            for enc in ("utf-8-sig", "latin-1", "utf-8"):
                 try:
                     df = pd.read_csv(
                         path, encoding=enc, dtype=str, keep_default_na=False
                     )
+                    logger.debug(f"Successfully loaded CSV with encoding: {enc}")
                     break
                 except UnicodeDecodeError:
+                    logger.debug(f"Failed to load CSV with encoding: {enc}")
                     df = None
             if df is None:
-                df = pd.read_csv(
-                    str(path),
-                    encoding="utf-8",
-                    dtype=str,
-                    keep_default_na=False,
-                )
+                logger.error(f"Could not load CSV file {path} with any supported encoding")
+                return []
         df = df.fillna("")
-        if logger:
-            logger.info(f"Loaded {len(df)} rows from data file: {path}")
+        logger.info(f"Loaded {len(df)} rows from data file: {path}")
         return df.to_dict(orient="records")
     except Exception as exc:
+        logger.error(f"Error loading data file {path}: {exc}", exc_info=True)
         return []
 
 
@@ -87,16 +90,16 @@ def extract_test_case_name_from_docstring(item, report):
 
 def print_results_summary(all_results):
 
-    header = "{:<10} {:<30} {:<10} {:<10} {:<20} {:<20} {:<10} {:<10} {}".format(
+    header = "{:<10} {:<30} {:<10} {:<10} {:<20} {:<20} {:<10} {:<10} {:<20}".format(
         "Status",
         "Title",
-        "Row Name",
         "Phase",
         "Request Category",
         "Request Sub Category",
         "Center",
         "Duration",
         "Error Log",
+        "Test Name",
     )
     sep = "-" * 150
     print("\nTest Results Summary:")
@@ -115,16 +118,16 @@ def print_results_summary(all_results):
             duration_str = f"{hours:02}:{minutes:02}:{seconds:02}"
         else:
             duration_str = str(duration_val)
-        row = "{:<10} {:<30} {:<10} {:<10} {:<20} {:<20} {:<10} {:<10} {}".format(
+        row = "{:<10} {:<30} {:<10} {:<10} {:<20} {:<20} {:<10} {:<10} {:<20}".format(
             result.get("test_status", ""),
             result.get("title", ""),
-            result.get("Row Name", ""),
             result.get("Phase", ""),
             result.get("Request Category", ""),
             result.get("Request Sub Category", ""),
             result.get("Center", ""),
             duration_str,
             result.get("error_log", ""),
+            result.get("test_name", ""),
         )
         print(row)
     print(sep)

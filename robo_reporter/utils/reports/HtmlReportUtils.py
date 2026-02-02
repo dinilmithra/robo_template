@@ -50,6 +50,7 @@ def get_html_template():
     return env.get_template("html_template.html")
 
 
+
 def get_report_summary(all_results, report_data):
     """
     Create the summary object for the report, including environment, project, test framework, total, and duration.
