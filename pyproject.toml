@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "robo-reporter"
+version = "1.0.0"
+description = "Comprehensive test reporting for Python projects with HTML reports and chart visualizations"
+readme = "README.md"
+authors = [
+    {name = "Your Name", email = "your.email@example.com"}
+]
+license = {text = "MIT"}
+classifiers = [
+    "Framework :: Pytest",
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Testing",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+keywords = ["pytest", "reporting", "html", "charts", "visualization", "test-automation", "robo"]
+dependencies = [
+    "pytest>=7.0.0",
+    "jinja2>=3.0.0",
+    "pandas>=2.0.0",
+]
+requires-python = ">=3.8"
+
+[project.urls]
+Homepage = "https://github.com/yourusername/robo-reporter"
+Documentation = "https://github.com/yourusername/robo-reporter#readme"
+Repository = "https://github.com/yourusername/robo-reporter"
+"Bug Tracker" = "https://github.com/yourusername/robo-reporter/issues"
+
+[project.entry-points.pytest11]
+robo-reporter = "robo_reporter.plugin"
+
+[tool.setuptools]
+packages = ["robo_reporter", "robo_reporter.utils", "robo_reporter.utils.reports"]
+
+[tool.setuptools.package-data]
+robo_reporter = ["templates/**/*", "utils/**/*"]

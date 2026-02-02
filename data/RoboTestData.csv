@@ -1,0 +1,21 @@
+﻿Row Name,Title,Phase,Request Category,Request Sub Category,Center,Value 1,Value 2
+0,Robo_Test_001,Execution,Purchase,Micro-Purchase,ABCD,1,1
+1,Robo_Test_002,Planning,Purchase,Tender,EFGH,1,2
+2,Robo_Test_003,Planning,Purchase,Convenience Check,KDGE,2,1
+3,Robo_Test_004,Planning,Purchase,Micro-Purchase,MNOP,1,2
+4,Robo_Test_005,Planning,Purchase,Mini-Purchase,ABCD,1,1
+5,Robo_Test_006,Planning,Purchase,Convenience Check,DFGE,1,2
+6,Robo_Test_007,Execution,Contract,,IJKL,1,1
+7,Robo_Test_008,Execution,Travel,Domestic,ABCD,1,1
+8,Robo_Test_009,Execution,Travel,Domestic,EFGH,1,1
+9,Robo_Test_010,Planning,Travel,Domestic,DYDJ,3,2
+10,Robo_Test_011,Execution,Travel,Domestic,MNOP,1,1
+11,Robo_Test_012,Planning,Travel,International,ABCD,1,2
+12,Robo_Test_013,Execution,Travel,International,EFGH,1,1
+13,Robo_Test_014,Execution,Travel,International,DHEF,1,1
+14,Robo_Test_015,Execution,Travel,International,MNOP,1,1
+15,Robo_Test_016,Execution,Travel,Local,ABCD,1,2
+16,Robo_Test_017,Execution,Travel,Local,FYDK,1,1
+17,Robo_Test_018,Planning,Travel,Local,IJKL,1,1
+18,Robo_Test_019,Execution,Travel,Local,MNOP,1,2
+19,Robo_Test_020,Execution,Grant,,MNOP,1,1

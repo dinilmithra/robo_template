@@ -1,11 +1,8 @@
 # HTML report generation using Jinja2
-from src.utils.reports.HtmlReportUtils import generate_html_report
-import logging
+from .reports.HtmlReportUtils import generate_html_report
 from pathlib import Path
 import zipfile
 import os
-
-logger = logging.getLogger(__name__)
 
 
 def profile_name_from_driver(driver) -> str:
@@ -29,11 +26,20 @@ def get_excel_rows(path: Path, logger=None):
     stored with a .csv name. Returns a list of dict rows suitable for
     parametrization.
     """
+    # Use logging module if logger not provided
+    if logger is None:
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+    # Print to stderr to ensure visibility in xdist mode
+    import sys
+
+    print(f"Loading data file: {path}", file=sys.stderr)
+
     try:
         import pandas as pd
     except ImportError:
-        if logger:
-            logger.warning("pandas not installed; unable to load Excel/CSV rows.")
         return []
     try:
         if zipfile.is_zipfile(path):
@@ -58,15 +64,16 @@ def get_excel_rows(path: Path, logger=None):
                     keep_default_na=False,
                 )
         df = df.fillna("")
+        if logger:
+            logger.info(f"Loaded {len(df)} rows from data file: {path}")
         return df.to_dict(orient="records")
     except Exception as exc:
-        if logger:
-            logger.warning(f"failed to load rows with pandas: {exc}")
         return []
 
 
-def get_env(key: str) -> str:
-    return os.getenv(key, "").strip()
+def get_env(key: str, default: str = "") -> str:
+    value = os.getenv(key, default).strip()
+    return value if value else default
 
 
 def extract_test_case_name_from_docstring(item, report):

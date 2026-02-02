@@ -10,9 +10,9 @@ def get_report_data(start_time):
     )
     report_dir = os.path.join(project_root, "reports")
     return {
-        "project_name": os.getenv("PROJECT_NAME", "N/A"),
-        "environment": os.getenv("APP_ENV", "N/A"),
-        "test_framework": os.getenv("TEST_FRAMEWORK", "N/A"),
+        "project_name": os.getenv("PROJECT_NAME", ""),
+        "env_name": os.getenv("APP_ENV", ""),
+        "test_framework": os.getenv("TEST_FRAMEWORK", "Robo Automation Framework"),
         "start_time": start_time,
         "end_time": datetime.now(),
         "report_dir": report_dir,
@@ -25,15 +25,28 @@ import os
 def get_html_template():
     """
     Returns the Jinja2 template object for the HTML report.
+    Checks for source template in project working directory first, then falls back to package template.
     """
     import os
     from jinja2 import Environment, FileSystemLoader
+    from pathlib import Path
 
-    project_root = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "..", "..", "..")
+    # Check for source template in current working directory only
+    source_template_dir = Path.cwd() / "templates" / "html_report"
+    source_template_file = source_template_dir / "html_template.html"
+    
+    if source_template_file.exists():
+        # print(f"Loading source template from: {source_template_dir}", flush=True)
+        env = Environment(loader=FileSystemLoader(str(source_template_dir)))
+        return env.get_template("html_template.html")
+    
+    # Fall back to package template inside robo_reporter directory
+    package_root = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "..")
     )
-    template_dir = os.path.join(project_root, "templates", "html_report")
-    env = Environment(loader=FileSystemLoader(template_dir))
+    package_template_dir = os.path.join(package_root, "templates", "html_report")
+    print(f"Loading package template from: {package_template_dir}", flush=True)
+    env = Environment(loader=FileSystemLoader(package_template_dir))
     return env.get_template("html_template.html")
 
 
@@ -62,9 +75,9 @@ def get_report_summary(all_results, report_data):
         if status in status_counts:
             status_counts[status] += 1
     return {
-        "environment": report_data.get("environment", "N/A"),
-        "project_name": report_data.get("project_name", "N/A"),
-        "test_framework": report_data.get("test_framework", "N/A"),
+        "env_name": report_data.get("env_name", ""),
+        "project_name": report_data.get("project_name", ""),
+        "test_framework": report_data.get("test_framework", ""),
         "total": len(all_results),
         "duration": duration_str,
         "passed": status_counts["PASSED"],

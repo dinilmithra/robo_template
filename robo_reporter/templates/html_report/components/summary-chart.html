@@ -1,0 +1,73 @@
+<!-- Results Summary Chart Component -->
+<div class="chart-container">
+    <canvas id="summaryChart" width="360" height="288"></canvas>
+</div>
+<script>
+function initializeSummaryChart() {
+    const ctx = document.getElementById('summaryChart');
+    if (!ctx) {
+        setTimeout(initializeSummaryChart, 100);
+        return;
+    }
+    
+    if (typeof window.statusColors === 'undefined' || typeof window.add3DEffect === 'undefined') {
+        setTimeout(initializeSummaryChart, 100);
+        return;
+    }
+    
+    // Destroy existing chart instance if it exists
+    const existingChart = Chart.getChart('summaryChart');
+    if (existingChart) {
+        existingChart.destroy();
+    }
+    
+    const baseColors = [window.statusColors['PASSED'], window.statusColors['FAILED'], window.statusColors['SKIPPED']];
+    new Chart(ctx.getContext('2d'), {
+        type: 'pie',
+        data: {
+            labels: ['Passed', 'Failed', 'Skipped'],
+            datasets: [{
+                data: window.summaryData || [0,0,0],
+                backgroundColor: window.add3DEffect(ctx.getContext('2d'), 'pie', baseColors),
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: false,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Results Summary',
+                    font: { size: 16, weight: 'bold' },
+                    color: '#212121',
+                    padding: { top: 0, bottom: 12 }
+                },
+                legend: {
+                    display: true,
+                    position: 'right',
+                    align: 'center',
+                    labels: {
+                        font: { size: 14 },
+                        usePointStyle: true,
+                        pointStyle: 'circle',
+                        generateLabels: function(chart) {
+                            const data = chart.data;
+                            return data.labels.map((label, i) => {
+                                return {
+                                    text: label,
+                                    fillStyle: baseColors[i],
+                                    strokeStyle: baseColors[i],
+                                    lineWidth: 1,
+                                    hidden: false,
+                                    index: i
+                                };
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+document.addEventListener('DOMContentLoaded', () => setTimeout(initializeSummaryChart, 50));
+</script>

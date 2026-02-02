@@ -1,0 +1,18 @@
+# Include template files
+recursive-include robo_reporter/templates *
+recursive-include robo_reporter/templates/html_report *
+recursive-include robo_reporter/templates/html_report/components *
+recursive-include robo_reporter/templates/html_report/scripts *
+
+# Include utils module
+recursive-include robo_reporter/utils *.py
+
+# Include documentation
+include README.md
+include LICENSE
+
+# Exclude compiled files
+global-exclude *.pyc
+global-exclude __pycache__
+global-exclude *.pyo
+global-exclude .DS_Store

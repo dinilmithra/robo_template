@@ -2,13 +2,16 @@ import logging
 import time
 
 import pytest
-from src.utils.RoboTemplateHelper import profile_name_from_driver, get_env
+from robo_reporter.utils import get_env
+
+# Import profile_name_from_driver - still only in robo_reporter.utils.RoboTemplateHelper
+from robo_reporter.utils.RoboTemplateHelper import profile_name_from_driver
 
 logger = logging.getLogger(__name__)
 
 
 @pytest.mark.datafile("TestData.csv")
-def test_open_google_with_unique_profile(row, driver, wait):
+def test_demo(row, driver, wait):
     """Test case to open Google using a unique Chrome profile."""
 
     title = row.get("Title", "")
@@ -60,3 +63,11 @@ def test_open_google_with_unique_profile(row, driver, wait):
     if value_1 > value_2:
         pytest.skip("Skipping due to some_condition")
     assert value_1 == value_2, "Value 1 and Value 2 should be same"
+
+
+
+
+@pytest.mark.datafile("RoboTestData.csv")
+def test_robo(row, driver, wait):
+    """Test with RoboTestData."""
+    pass
