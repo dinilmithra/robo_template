@@ -6,9 +6,16 @@ summary.env_name ~ ' )' if summary.env_name else '') %}
 <head>
     <meta charset="UTF-8">
     <title>{{ page_title }}</title>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:400,500,700&display=swap">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        {{ embedded_material_icons }}
+        {{ embedded_robo_fonts }}
+    </style>
+    <script>
+        {{ embedded_chart_js }}
+    </script>
+    <script>
+        {{ embedded_report_js }}
+    </script>
     <style>
         {{ embedded_css }}
     </style>
@@ -36,30 +43,6 @@ summary.env_name ~ ' )' if summary.env_name else '') %}
 
             <!-- Results Table Component -->
             {% include "components/results-table.html" %}
-
-            <script>
-                window.allResultsData = [
-                    {% for result in report_rows %}
-                {
-                    center: `{{ result.Center|e }}`,
-                        status: `{{ result.test_status|e }}`,
-                            phase: `{{ result.Phase|e }}`,
-                                category: `{{ result['Request Category']|e }}`
-                }
-                {% if not loop.last %}, {% endif %} {% endfor %}
-                        ];
-
-                // Order: [Passed, Failed, Skipped]
-                window.summaryData = [
-                    {{ summary.passed if summary.passed is defined else 0 }},
-                    {{ summary.failed if summary.failed is defined else 0 }},
-                    {{ summary.skipped if summary.skipped is defined else 0 }}
-                ];
-            </script>
-            <!-- Main Report Charts Script -->
-            <script>
-{{ embedded_report_js }}
-            </script>
         </div>
     </div>
     <footer class="report-footer">

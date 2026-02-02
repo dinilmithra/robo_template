@@ -312,14 +312,14 @@ body {
 }
 
 .results-table th.sortable.sorted-asc::after {
-    background-image: url('data:image/svg+xml;utf8,<svg fill="%231976d2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M8 5l4 5H4z"/></svg>');
-    /* Up arrow */
+    background-image: url('data:image/svg+xml;utf8,<svg fill="%231976d2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M8 11l-4-5h8z"/></svg>');
+    /* Up arrow - pointing upward */
     opacity: 1;
 }
 
 .results-table th.sortable.sorted-desc::after {
-    background-image: url('data:image/svg+xml;utf8,<svg fill="%231976d2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M8 11l-4-5h8z"/></svg>');
-    /* Down arrow */
+    background-image: url('data:image/svg+xml;utf8,<svg fill="%231976d2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M8 5l4 5H4z"/></svg>');
+    /* Down arrow - pointing downward */
     opacity: 1;
 }
 

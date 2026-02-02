@@ -10,10 +10,25 @@ function initializeSummaryChart() {
         return;
     }
     
-    if (typeof window.statusColors === 'undefined' || typeof window.add3DEffect === 'undefined') {
+    if (typeof window.statusColors === 'undefined' || typeof window.add3DEffect === 'undefined' || typeof Chart === 'undefined') {
         setTimeout(initializeSummaryChart, 100);
         return;
     }
+    
+    // Extract status data from template
+    const statusData = [
+        {% for result in report_rows %}
+        `{{ result.test_status|e }}`{% if not loop.last %},{% endif %}
+        {% endfor %}
+    ];
+    
+    // Calculate summary data from status
+    const summaryData = [0, 0, 0]; // [Passed, Failed, Skipped]
+    statusData.forEach(status => {
+        if (status === 'PASSED') summaryData[0]++;
+        else if (status === 'FAILED' || status === 'ERROR') summaryData[1]++;
+        else if (status === 'SKIPPED') summaryData[2]++;
+    });
     
     // Destroy existing chart instance if it exists
     const existingChart = Chart.getChart('summaryChart');
@@ -27,7 +42,7 @@ function initializeSummaryChart() {
         data: {
             labels: ['Passed', 'Failed', 'Skipped'],
             datasets: [{
-                data: window.summaryData || [0,0,0],
+                data: summaryData,
                 backgroundColor: window.add3DEffect(ctx.getContext('2d'), 'pie', baseColors),
                 borderWidth: 1
             }]
@@ -69,5 +84,11 @@ function initializeSummaryChart() {
         }
     });
 }
-document.addEventListener('DOMContentLoaded', () => setTimeout(initializeSummaryChart, 50));
+(function() {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeSummaryChart);
+    } else {
+        initializeSummaryChart();
+    }
+})();
 </script>

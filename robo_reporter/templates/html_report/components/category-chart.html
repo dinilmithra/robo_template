@@ -10,29 +10,38 @@ function initializeCategoryChart() {
         return;
     }
     
-    if (typeof window.statusColors === 'undefined' || typeof window.add3DEffect === 'undefined') {
+    if (typeof window.statusColors === 'undefined' || typeof window.add3DEffect === 'undefined' || typeof Chart === 'undefined') {
         setTimeout(initializeCategoryChart, 100);
         return;
     }
 
-    const allResults = window.allResultsData || [];
+    const categoryStatusData = [
+        {% for result in report_rows %}
+        {
+            category: `{{ result['Request Category']|e }}`,
+            status: `{{ result.test_status|e }}`
+        }{% if not loop.last %},{% endif %}
+        {% endfor %}
+    ];
+    
     const statusTypes = window.statusTypes || ['PASSED', 'FAILED', 'SKIPPED'];
     const statusColors = window.statusColors;
     const add3DEffect = window.add3DEffect;
 
     const categorySet = new Set();
-    allResults.forEach(r => {
+    categoryStatusData.forEach(r => {
         if (r.category && r.category !== '-') categorySet.add(r.category);
     });
     const categoryLabels = Array.from(categorySet);
 
     const statusByCategory = {};
-    allResults.forEach(r => {
+    categoryStatusData.forEach(r => {
         const category = r.category;
         let status = (r.status || '').toUpperCase();
         if (status === 'ERROR') status = 'FAILED';
         if (!category || category === '-' || !statusTypes.includes(status)) return;
         if (!statusByCategory[category]) statusByCategory[category] = { PASSED: 0, FAILED: 0, SKIPPED: 0 };
+        if (statusByCategory[category][status] !== undefined) statusByCategory[category][status]++;
         if (statusByCategory[category][status] !== undefined) statusByCategory[category][status]++;
     });
 
@@ -129,5 +138,11 @@ function initializeCategoryChart() {
         }
     });
 }
-document.addEventListener('DOMContentLoaded', () => setTimeout(initializeCategoryChart, 50));
+(function() {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeCategoryChart);
+    } else {
+        initializeCategoryChart();
+    }
+})();
 </script>

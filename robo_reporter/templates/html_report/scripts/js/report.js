@@ -1,9 +1,9 @@
 // ============================================================================
-// Merged JavaScript: All charts, table sorting, filtering, and modal logic
+// Merged JavaScript: Table sorting, filtering, and modal logic
 // ============================================================================
 
 // ============================================================================
-// UTILITY FUNCTIONS
+// UTILITY FUNCTIONS FOR CHARTS
 // ============================================================================
 
 // Utility to lighten or darken a hex color
@@ -19,28 +19,51 @@ function shadeColor(color, percent) {
 
 // Utility to add 3D shadow effect to Chart.js charts
 function add3DEffect(ctx, chartType, baseColors) {
-    // SOFTER 3D: use less intense highlight/shadow
     if (chartType === 'pie' || chartType === 'doughnut') {
-        // Create radial gradient for each segment
         return baseColors.map((color, i) => {
             const grad = ctx.createRadialGradient(90, 90, 10, 90, 90, 90);
-            grad.addColorStop(0, shadeColor(color, 0.15)); // softer highlight
-            grad.addColorStop(0.6, color); // base
-            grad.addColorStop(1, shadeColor(color, -0.15)); // softer shadow
+            grad.addColorStop(0, shadeColor(color, 0.15));
+            grad.addColorStop(0.6, color);
+            grad.addColorStop(1, shadeColor(color, -0.15));
             return grad;
         });
     } else if (chartType === 'bar') {
-        // Create vertical gradient for bars
         return baseColors.map((color, i) => {
             const grad = ctx.createLinearGradient(0, 0, 0, 300);
-            grad.addColorStop(0, shadeColor(color, 0.15)); // softer highlight
-            grad.addColorStop(0.5, color); // base
-            grad.addColorStop(1, shadeColor(color, -0.15)); // softer shadow
+            grad.addColorStop(0, shadeColor(color, 0.15));
+            grad.addColorStop(0.5, color);
+            grad.addColorStop(1, shadeColor(color, -0.15));
             return grad;
         });
     }
     return baseColors;
 }
+
+// Material Design color palette
+const statusTypes = ['PASSED', 'FAILED', 'SKIPPED'];
+const statusColors = {
+    'PASSED': '#43a047',   // Material Green 600
+    'FAILED': '#e53935',   // Material Red 600
+    'SKIPPED': '#fbc02d'   // Material Yellow 700
+};
+
+// Material palette for center/doughnut charts
+const centerPalette = [
+    '#1e88e5', // Blue 600
+    '#8e24aa', // Purple 600
+    '#00acc1', // Cyan 600
+    '#fb8c00', // Orange 600
+    '#6d4c41', // Brown 600
+    '#3949ab', // Indigo 600
+    '#c0ca33'  // Lime 600
+];
+
+// Export globals for component modules
+window.shadeColor = shadeColor;
+window.add3DEffect = add3DEffect;
+window.statusColors = statusColors;
+window.centerPalette = centerPalette;
+window.statusTypes = statusTypes;
 
 // ============================================================================
 // TABLE SORTING AND FILTERING FUNCTIONS
@@ -61,18 +84,18 @@ function sortTable(header, table) {
     });
     
     // Toggle sort direction
-    const isAscending = !header.classList.contains('sort-asc');
+    const isAscending = !header.classList.contains('sorted-asc');
     
     // Remove sort indicators from all headers
     headers.forEach(h => {
-        h.classList.remove('sort-asc', 'sort-desc');
+        h.classList.remove('sorted-asc', 'sorted-desc');
     });
     
     // Add sort indicator to current header
     if (isAscending) {
-        header.classList.add('sort-asc');
+        header.classList.add('sorted-asc');
     } else {
-        header.classList.add('sort-desc');
+        header.classList.add('sorted-desc');
     }
     
     // Sort rows (but don't sort by the # column itself)
@@ -102,34 +125,27 @@ function sortTable(header, table) {
     });
     
     // Reindex all rows after sorting
-    console.log('Reindexing after sort, total rows:', rows.length);
     rows.forEach((row, index) => {
         if (row.cells && row.cells[0]) {
             const oldValue = row.cells[0].textContent;
             const newValue = index + 1;
             row.cells[0].textContent = newValue;
-            console.log(`Row ${index}: Changed # from "${oldValue}" to "${newValue}"`);
         }
     });
-    console.log('Reindexing complete');
 }
 
 // Reindex the row numbers based on visible rows
 function reindexVisibleRows(table) {
-    console.log('reindexVisibleRows called');
     if (!table) {
-        console.log('No table provided');
         return;
     }
     
     const tbody = table.querySelector('tbody');
     if (!tbody) {
-        console.log('No tbody found');
         return;
     }
     
     const rows = tbody.querySelectorAll('tr');
-    console.log('Total rows found:', rows.length);
     let visibleIndex = 1;
     
     rows.forEach((row, i) => {
@@ -137,16 +153,12 @@ function reindexVisibleRows(table) {
         const computedStyle = window.getComputedStyle(row);
         const isVisible = computedStyle.display !== 'none';
         
-        console.log(`Row ${i}: display=${computedStyle.display}, isVisible=${isVisible}`);
-        
         if (isVisible && row.cells && row.cells[0]) {
             const oldValue = row.cells[0].textContent;
             row.cells[0].textContent = visibleIndex;
-            console.log(`Row ${i}: Changed # from "${oldValue}" to "${visibleIndex}"`);
             visibleIndex++;
         }
     });
-    console.log('reindexVisibleRows complete, final visibleIndex:', visibleIndex);
 }
 
 // Filter table based on status checkboxes and search input
@@ -158,14 +170,11 @@ function setupTableFilters() {
     if (!table || statusFilters.length === 0) return;
     
     function filterTable() {
-        console.log('filterTable called');
         const selectedStatuses = Array.from(statusFilters)
             .filter(f => f.checked)
             .map(f => f.value.toUpperCase());
         
-        console.log('Selected statuses:', selectedStatuses);
         const searchTerm = searchInput ? searchInput.value.toLowerCase() : '';
-        console.log('Search term:', searchTerm);
         const rows = table.querySelectorAll('tbody tr');
         
         rows.forEach((row, index) => {
@@ -258,155 +267,10 @@ document.addEventListener('keydown', function(event) {
 });
 
 // ============================================================================
-// CHART INITIALIZATION
+// CHART INITIALIZATION (components handle chart rendering now)
 // ============================================================================
 
 document.addEventListener('DOMContentLoaded', function() {
-    // Data setup
-    const allResults = window.allResultsData || [];
-    
-    // Material Design color palette
-    const statusTypes = ['PASSED', 'FAILED', 'SKIPPED'];
-    const statusColors = {
-        'PASSED': '#43a047',   // Material Green 600
-        'FAILED': '#e53935',   // Material Red 600
-        'SKIPPED': '#fbc02d'   // Material Yellow 700
-    };
-    
-    // Material palette for center/doughnut charts (no green, yellow, or red)
-    const centerPalette = [
-        '#1e88e5', // Blue 600
-        '#8e24aa', // Purple 600
-        '#00acc1', // Cyan 600
-        '#fb8c00', // Orange 600
-        '#6d4c41', // Brown 600
-        '#3949ab', // Indigo 600
-        '#c0ca33'  // Lime 600
-    ];
-    
-    // Export globals for component modules
-    window.statusColors = statusColors;
-    window.centerPalette = centerPalette;
-    window.statusTypes = statusTypes;
-    
-    // 1. Results Summary (Pie)
-    (function() {
-        const ctx = document.getElementById('summaryChart');
-        if (!ctx) {
-            console.warn('Summary chart container not found');
-            return;
-        }
-        const baseColors = [statusColors['PASSED'], statusColors['FAILED'], statusColors['SKIPPED']];
-        new Chart(ctx.getContext('2d'), {
-            type: 'pie',
-            data: {
-                labels: ['Passed', 'Failed', 'Skipped'],
-                datasets: [{
-                    data: window.summaryData || [0,0,0],
-                    backgroundColor: add3DEffect(ctx.getContext('2d'), 'pie', baseColors),
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: false,
-                plugins: {
-                    legend: {
-                        display: true,
-                        position: 'right',
-                        align: 'center',
-                        labels: {
-                            font: { size: 14 },
-                            usePointStyle: true,
-                            pointStyle: 'rect',
-                            generateLabels: function(chart) {
-                                const data = chart.data;
-                                return data.labels.map((label, i) => {
-                                    return {
-                                        text: label,
-                                        fillStyle: baseColors[i],
-                                        strokeStyle: baseColors[i],
-                                        lineWidth: 1,
-                                        hidden: false,
-                                        index: i
-                                    };
-                                });
-                            }
-                        }
-                    },
-                    title: {
-                        display: true,
-                        text: 'Results Summary',
-                        font: { size: 18 }
-                    }
-                }
-            }
-        });
-    })();
-    
-    // 2. Distribution by Center (Doughnut)
-    const centerCounts = {};
-    allResults.forEach(r => {
-        if (r.center && r.center !== '-') {
-            centerCounts[r.center] = (centerCounts[r.center] || 0) + 1;
-        }
-    });
-    const centerLabels = Object.keys(centerCounts);
-    const centerData = Object.values(centerCounts);
-    (function() {
-        const ctx = document.getElementById('centerChart');
-        if (!ctx) {
-            console.warn('Center chart container not found');
-            return;
-        }
-        // Always use centerPalette (no status-like colors) for center colors and legend
-        const centerColors = centerLabels.map((_, i) => centerPalette[i % centerPalette.length]);
-        new Chart(ctx.getContext('2d'), {
-            type: 'doughnut',
-            data: {
-                labels: centerLabels,
-                datasets: [{
-                    data: centerData,
-                    backgroundColor: add3DEffect(ctx.getContext('2d'), 'doughnut', centerColors),
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: false,
-                plugins: {
-                    legend: {
-                        display: true,
-                        position: 'right',
-                        align: 'center',
-                        labels: {
-                            font: { size: 14 },
-                            usePointStyle: true,
-                            pointStyle: 'rect',
-                            generateLabels: function(chart) {
-                                // Always use centerPalette for legend colors
-                                return chart.data.labels.map((label, i) => {
-                                    const color = centerPalette[i % centerPalette.length];
-                                    return {
-                                        text: label,
-                                        fillStyle: color,
-                                        strokeStyle: color,
-                                        lineWidth: 1,
-                                        hidden: false,
-                                        index: i
-                                    };
-                                });
-                            }
-                        }
-                    },
-                    title: {
-                        display: true,
-                        text: 'Distribution by Center',
-                        font: { size: 18 }
-                    }
-                }
-            }
-        });
-    })();
-    
     // Setup table sorting event listeners
     const table = document.querySelector('.results-table');
     if (table) {
@@ -419,6 +283,9 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    // Setup table filters
+    setupTableFilters();
+    
     // Attach click event to table rows for error popup
     var resultsTable = document.getElementById('resultsTable');
     if (resultsTable) {
@@ -429,13 +296,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
-
-// Set up filters when DOM is ready
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', setupTableFilters);
-} else {
-    setupTableFilters();
-}
 
 // Ensure reindexing happens after page fully loads and filters are applied
 window.addEventListener('load', function() {

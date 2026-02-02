@@ -10,20 +10,25 @@ function initializeCenterChart() {
         return;
     }
     
-    if (typeof window.centerPalette === 'undefined' || typeof window.add3DEffect === 'undefined') {
+    if (typeof window.centerPalette === 'undefined' || typeof window.add3DEffect === 'undefined' || typeof Chart === 'undefined') {
         setTimeout(initializeCenterChart, 100);
         return;
     }
     
-    const allResults = window.allResultsData || [];
+    const centerData = [
+        {% for result in report_rows %}
+        `{{ result.Center|e }}`{% if not loop.last %},{% endif %}
+        {% endfor %}
+    ];
+    
     const centerCounts = {};
-    allResults.forEach(r => {
-        if (r.center && r.center !== '-') {
-            centerCounts[r.center] = (centerCounts[r.center] || 0) + 1;
+    centerData.forEach(c => {
+        if (c && c !== '-') {
+            centerCounts[c] = (centerCounts[c] || 0) + 1;
         }
     });
     const centerLabels = Object.keys(centerCounts);
-    const centerData = centerLabels.map(c => centerCounts[c]);
+    const centerValues = centerLabels.map(c => centerCounts[c]);
     
     // Destroy existing chart instance if it exists
     const existingChart = Chart.getChart('centerChart');
@@ -34,7 +39,7 @@ function initializeCenterChart() {
     const ctxObj = ctx.getContext('2d');
     const centerColors = window.centerPalette.slice(0, centerLabels.length);
     const center3dDatasets = [{
-        data: centerData,
+        data: centerValues,
         backgroundColor: window.add3DEffect(ctxObj, 'doughnut', centerColors),
         borderWidth: 1
     }];
@@ -82,5 +87,11 @@ function initializeCenterChart() {
         }
     });
 }
-document.addEventListener('DOMContentLoaded', () => setTimeout(initializeCenterChart, 50));
+(function() {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeCenterChart);
+    } else {
+        initializeCenterChart();
+    }
+})();
 </script>

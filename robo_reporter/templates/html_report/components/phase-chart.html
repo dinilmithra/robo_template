@@ -10,29 +10,38 @@ function initializePhaseChart() {
         return;
     }
     
-    if (typeof window.statusColors === 'undefined' || typeof window.add3DEffect === 'undefined') {
+    if (typeof window.statusColors === 'undefined' || typeof window.add3DEffect === 'undefined' || typeof Chart === 'undefined') {
         setTimeout(initializePhaseChart, 100);
         return;
     }
 
-    const allResults = window.allResultsData || [];
+    const phaseStatusData = [
+        {% for result in report_rows %}
+        {
+            phase: `{{ result.Phase|e }}`,
+            status: `{{ result.test_status|e }}`
+        }{% if not loop.last %},{% endif %}
+        {% endfor %}
+    ];
+    
     const statusTypes = window.statusTypes || ['PASSED', 'FAILED', 'SKIPPED'];
     const statusColors = window.statusColors;
     const add3DEffect = window.add3DEffect;
 
     const phaseSet = new Set();
-    allResults.forEach(r => {
+    phaseStatusData.forEach(r => {
         if (r.phase && r.phase !== '-') phaseSet.add(r.phase);
     });
     const phaseLabels = Array.from(phaseSet);
 
     const statusByPhase = {};
-    allResults.forEach(r => {
+    phaseStatusData.forEach(r => {
         const phase = r.phase;
         let status = (r.status || '').toUpperCase();
         if (status === 'ERROR') status = 'FAILED';
         if (!phase || phase === '-' || !statusTypes.includes(status)) return;
         if (!statusByPhase[phase]) statusByPhase[phase] = { PASSED: 0, FAILED: 0, SKIPPED: 0 };
+        if (statusByPhase[phase][status] !== undefined) statusByPhase[phase][status]++;
         if (statusByPhase[phase][status] !== undefined) statusByPhase[phase][status]++;
     });
 
@@ -129,5 +138,11 @@ function initializePhaseChart() {
         }
     });
 }
-document.addEventListener('DOMContentLoaded', () => setTimeout(initializePhaseChart, 50));
+(function() {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializePhaseChart);
+    } else {
+        initializePhaseChart();
+    }
+})();
 </script>

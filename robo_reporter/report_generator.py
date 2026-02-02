@@ -175,9 +175,31 @@ def generate_report(report_rows, report_summary, start_time):
     try:
         scripts_dir = Path(__file__).parent / "templates" / "html_report" / "scripts"
 
-        # Read CSS file
+        # Read CSS files
         css_path = scripts_dir / "css" / "report.css"
         css_content = css_path.read_text(encoding="utf-8") if css_path.exists() else ""
+
+        material_icons_path = scripts_dir / "css" / "material-icons.css"
+        material_icons_content = (
+            material_icons_path.read_text(encoding="utf-8")
+            if material_icons_path.exists()
+            else ""
+        )
+
+        robo_fonts_path = scripts_dir / "css" / "robo-fonts.css"
+        robo_fonts_content = (
+            robo_fonts_path.read_text(encoding="utf-8")
+            if robo_fonts_path.exists()
+            else ""
+        )
+
+        # Read Chart.js library
+        chart_js_path = scripts_dir / "js" / "chart.js"
+        chart_js_content = (
+            chart_js_path.read_text(encoding="utf-8")
+            if chart_js_path.exists()
+            else ""
+        )
 
         # Read merged JS file
         report_js_path = scripts_dir / "js" / "report.js"
@@ -190,10 +212,16 @@ def generate_report(report_rows, report_summary, start_time):
 
         # Add to template data
         template_data["embedded_css"] = css_content
+        template_data["embedded_material_icons"] = material_icons_content
+        template_data["embedded_robo_fonts"] = robo_fonts_content
+        template_data["embedded_chart_js"] = chart_js_content
         template_data["embedded_report_js"] = report_js_content
     except Exception as e:
         # If reading fails, use empty strings
         template_data["embedded_css"] = ""
+        template_data["embedded_material_icons"] = ""
+        template_data["embedded_robo_fonts"] = ""
+        template_data["embedded_chart_js"] = ""
         template_data["embedded_report_js"] = ""
 
     # Load template using get_html_template() which checks source first
