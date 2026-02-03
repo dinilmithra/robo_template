@@ -47,8 +47,6 @@ def robo_custom_attribute_data(row_fixture):
     """
     # Example: Extract 'Test Case Name' from row_fixture
     # and add any custom fields
-    print(f"\n[DEBUG] robo_custom_attribute_data function called")
-    print(f"[DEBUG] row_fixture keys: {row_fixture.keys()}")
     
     return {
         "test_case_name": row_fixture.get("Test Case Name", ""),
