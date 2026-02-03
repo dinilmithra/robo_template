@@ -285,6 +285,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 sortTable(this, table);
             });
         });
+        
+        // Default sort by test_case_name (2nd sortable column)
+        const testCaseNameHeader = table.querySelector('th.test_case_name');
+        if (testCaseNameHeader) {
+            sortTable(testCaseNameHeader, table);
+        }
     }
     
     // Setup table filters

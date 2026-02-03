@@ -39,7 +39,7 @@
     </thead>
     <tbody>
         {% for row in report_rows %}
-        <tr data-test-name="{{ row.test_id|e }}" data-outcome="{{ row.test_status|e }}"
+        <tr data-test-name="{{ row.test_case_name|e }}" data-outcome="{{ row.test_status|e }}"
             data-error="{{ row.error_log|e }}">
             <td>{{ loop.index }}</td>
             <td class="status-{{ row.test_status|lower }}">
