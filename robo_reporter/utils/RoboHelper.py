@@ -36,8 +36,6 @@ def load_test_data(path: Path):
     # Print to stderr to ensure visibility in xdist mode
     import sys
 
-    logger.info(f"Loading data file: {path}" )
-
     # Validate file exists
     if not os.path.exists(path):
         logger.error(f"Data file not found: {path}")
@@ -61,16 +59,14 @@ def load_test_data(path: Path):
                     df = pd.read_csv(
                         path, encoding=enc, dtype=str, keep_default_na=False
                     )
-                    logger.debug(f"Successfully loaded CSV with encoding: {enc}")
                     break
                 except UnicodeDecodeError:
-                    logger.debug(f"Failed to load CSV with encoding: {enc}")
                     df = None
             if df is None:
                 logger.error(f"Could not load CSV file {path} with any supported encoding")
                 return []
         df = df.fillna("")
-        logger.info(f"Loaded {len(df)} rows from data file: {path}")
+
         return df.to_dict(orient="records")
     except Exception as exc:
         logger.error(f"Error loading data file {path}: {exc}", exc_info=True)

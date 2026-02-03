@@ -30,26 +30,28 @@
         <tr>
             <th class="row_number" data-column-type="row_number">#</th>
             <th class="sortable test_status" data-column-type="test_status">Status</th>
-            <th class="sortable title" data-column-type="title">Title</th> 
+            <th class="sortable test_id" data-column-type="test_id">Title</th> 
             <th class="sortable phase" data-column-type="phase">Phase</th>
             <th class="sortable request_category" data-column-type="request_category">Request Category</th>
             <th class="sortable request_sub_category" data-column-type="request_sub_category">Request Sub Category</th>
             <th class="sortable center" data-column-type="center">Center</th>
+            <th class="sortable duration" data-column-type="center">Duration</th>
         </tr>
     </thead>
     <tbody>
         {% for row in report_rows %}
-        <tr data-test-name="{{ row.title|e }}" data-outcome="{{ row.test_status|e }}"
+        <tr data-test-name="{{ row.test_id|e }}" data-outcome="{{ row.test_status|e }}"
             data-error="{{ row.error_log|e }}">
             <td>{{ loop.index }}</td>
             <td class="status-{{ row.test_status|lower|replace('error','failed') }}">
                 {{ row.test_status|replace('ERROR', 'FAILED') }}
             </td>
-            <td>{{ row.title or '' }}</td> 
+            <td>{{ row.test_id or '' }}</td> 
             <td>{{ row['Phase'] or '' }}</td>
             <td>{{ row['Request Category'] or '' }}</td>
             <td>{{ row['Request Sub Category'] or '' }}</td>
             <td>{{ row['Center'] or '' }}</td>
+            <td>{{ row['duration']|default('', true) }}</td>
         </tr>
         {% endfor %}
     </tbody>

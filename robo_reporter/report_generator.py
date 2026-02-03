@@ -64,7 +64,7 @@ def aggregate_test_results(config):
             elif isinstance(entry, list):
                 worker_results = [r for r in entry if isinstance(r, dict)]
                 report_rows.extend(worker_results)
-                
+    
     return report_rows
 
 

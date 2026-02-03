@@ -32,13 +32,21 @@ summary.env_name ~ ' )' if summary.env_name else '') %}
                 <!-- Results Summary Chart Component -->
                 {% include "components/summary-chart.html" %}
                 <!-- Distribution by Center Chart Component -->
+                {% if report_rows|selectattr('Center')|select|list|length > 0 %}
                 {% include "components/center-chart.html" %}
+                {% endif %}
                 <!-- Status by Phase Chart Component -->
+                {% if report_rows|selectattr('Phase')|select|list|length > 0 %}
                 {% include "components/phase-chart.html" %}
+                {% endif %}
                 <!-- Status by Request Category Chart Component -->
+                {% if report_rows|selectattr('Request Category')|select|list|length > 0 %}
                 {% include "components/category-chart.html" %}
+                {% endif %}
                 <!-- Status by Center Chart Component -->
+                {% if report_rows|selectattr('Center')|select|list|length > 0 %}
                 {% include "components/status-center-chart.html" %}
+                {% endif %}
             </div>
 
             <!-- Results Table Component -->

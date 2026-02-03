@@ -45,7 +45,6 @@ def get_html_template():
         os.path.join(os.path.dirname(__file__), "..", "..")
     )
     package_template_dir = os.path.join(package_root, "templates", "html_report")
-    print(f"Loading package template from: {package_template_dir}", flush=True)
     env = Environment(loader=FileSystemLoader(package_template_dir))
     return env.get_template("html_template.html")
 

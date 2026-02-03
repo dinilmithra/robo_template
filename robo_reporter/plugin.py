@@ -1,6 +1,16 @@
 """
 Robo Reporter - Pytest Plugin
 Collects test results and generates HTML reports with chart visualizations.
+
+PYTEST HOOK EXECUTION ORDER:
+1. pytest_addoption - Register command-line options
+2. pytest_plugin_registered - Check and manage plugin registration
+3. pytest_configure - Initialize configuration and global state
+4. pytest_collection - Optimize test collection
+5. pytest_generate_tests - Parametrize tests with CSV data
+6. pytest_runtest_makereport - Capture individual test results
+7. pytest_testnodedown - Aggregate results from xdist workers
+8. pytest_unconfigure - Generate final HTML report
 """
 
 import logging
@@ -25,6 +35,7 @@ from .report_generator import (
 )
 from .utils.RoboHelper import print_results_summary
 from .utils import get_env, load_test_data
+from . import hookspec
 
 
 logger = logging.getLogger(__name__)
@@ -34,101 +45,6 @@ logger.propagate = True
 load_dotenv()
 
 # ============================================================================
-# Pytest Hook Specifications (for source projects to implement)
-# ============================================================================
-
-
-def robo_report_summary(config, report_summary, report_rows):
-    """
-    Hook specification for source projects to customize the report_summary object.
-
-    Source projects can implement this hook in their conftest.py to:
-    - Add custom fields
-    - Modify existing values
-    - Delete fields
-    - Add custom logic
-
-    Args:
-        config: Pytest config object (allows access to environment, markers, etc.)
-        report_summary: Dictionary with summary stats (total, passed, failed, skipped, etc.)
-        report_rows: List of all test result dictionaries
-
-    Returns:
-        Modified report_summary dictionary (or original if no changes)
-
-    Example in source project's conftest.py:
-        def robo_report_summary(config, report_summary, report_rows):
-            # Add custom field
-            report_summary['custom_metric'] = len([r for r in report_rows if r.get('Phase') == 'Smoke'])
-            # Modify existing field
-            report_summary['project_name'] = 'My Custom Project'
-            return report_summary
-    """
-    pass
-
-
-def robo_report_rows(config, report_rows):
-    """
-    Hook specification for source projects to customize the report_rows list.
-
-    Source projects can implement this hook in their conftest.py to:
-    - Filter test results
-    - Add/modify/delete result fields
-    - Reorder results
-    - Enrich result data
-
-    Args:
-        config: Pytest config object (allows access to environment, markers, etc.)
-        report_rows: List of all test result dictionaries
-
-    Returns:
-        Modified report_rows list (or original if no changes)
-
-    Example in source project's conftest.py:
-        def robo_report_rows(config, report_rows):
-            # Filter to only show failed tests
-            failed_tests = [r for r in report_rows if r.get('test_status') in ['ERROR', 'FAILED']]
-            return failed_tests
-
-            # Or add custom fields to each result
-            for row in report_rows:
-                row['custom_id'] = row.get('test_name', '').split('::')[-1]
-            return report_rows
-    """
-    pass
-
-
-def robo_load_test_data(data_path):
-    """
-    Hook specification for source projects to override test data loading logic.
-
-    Source projects can implement this hook in their conftest.py to:
-    - Load data from custom sources (databases, APIs, etc.)
-    - Apply custom parsing/transformation logic
-    - Use different file formats or encodings
-    - Cache or preprocess data
-
-    Args:
-        data_path: Path object pointing to the data file
-
-    Returns:
-        List of dict rows suitable for parametrization, or None to use default loader
-
-    Example in source project's conftest.py:
-        def robo_load_test_data(data_path):
-            # Custom loading logic from database
-            if str(data_path).endswith('.json'):
-                import json
-                with open(data_path) as f:
-                    return json.load(f)
-
-            # Return None to fall back to default CSV/Excel loading
-            return None
-    """
-    pass
-
-
-# ============================================================================
 # Global Variables for pytest-xdist result aggregation
 # ============================================================================
 
@@ -136,12 +52,23 @@ _MASTER_CONFIG = None  # Global reference to master config for xdist aggregation
 
 
 # ============================================================================
-# Pytest Hooks
+# Pytest Hooks (ordered by execution sequence)
 # ============================================================================
 
+# ============================================================================
+# HOOK 1: pytest_addoption
+# Execution: Very first - before plugins are loaded
+# Purpose: Register custom command-line options for the pytest command
+# ============================================================================
 
 def pytest_addoption(parser):
-    """Add custom command line options."""
+    """
+    Register command-line options for the robo-reporter plugin.
+    
+    Options:
+    - --robo-report: Custom path for HTML report output
+    - --robo-report-title: Custom title for the HTML report
+    """
     group = parser.getgroup("robo-reporter", "Robo Reporter Options")
     group.addoption(
         "--robo-report",
@@ -159,10 +86,20 @@ def pytest_addoption(parser):
     )
 
 
+# ============================================================================
+# HOOK 2: pytest_plugin_registered
+# Execution: When each plugin is registered (after addoption)
+# Purpose: Manage plugin lifecycle - can unregister plugins if conditions met
+# ============================================================================
+
 def pytest_plugin_registered(plugin, manager):
     """
     Called when a plugin is registered.
-    - Unregisters xdist if PARALLEL_EXECUTION is disabled.
+    
+    Functionality:
+    - Checks PARALLEL_EXECUTION environment variable
+    - Unregisters pytest-xdist if PARALLEL_EXECUTION is disabled
+    - Allows disabling parallel execution via environment configuration
     """
 
     # Check if the registered plugin is the xdist dsession plugin
@@ -174,12 +111,34 @@ def pytest_plugin_registered(plugin, manager):
             manager.unregister(plugin)
 
 
+# ============================================================================
+# HOOK 3: pytest_configure
+# Execution: After command-line parsing and all plugins loaded
+# Purpose: Initialize plugin state, register hookspecs, store global config
+# Runs on: Both master and worker processes
+# ============================================================================
+
 def pytest_configure(config):
     """
-    Called after command line options have been parsed and all plugins loaded.
-    Initializes test results collection and stores session start time.
-    Runs on both master and worker processes.
+    Initialize robo-reporter plugin configuration.
+    
+    Responsibilities:
+    1. Register hook specifications from hookspec.py module
+    2. Store session start time for report duration calculation
+    3. Initialize test_results_summary list on config object
+    4. Store master config reference in global variable for xdist workers
+    
+    Config attributes created:
+    - config.test_results_summary: List to collect test result dicts
+    - config._sessionstart_time: Session start datetime
+    - _MASTER_CONFIG: Global ref to master config for worker aggregation
     """
+    # Register hook specifications so source projects can implement them
+    # This ensures hookimpls from conftest.py are recognized
+    if not hasattr(config.pluginmanager, "_robo_hookspecs_registered"):
+        config.pluginmanager.add_hookspecs(hookspec)
+        config.pluginmanager._robo_hookspecs_registered = True
+    
     # Store session start time for HTML report duration calculation (master only)
     if not hasattr(config, "workerinput") and not hasattr(config, "_sessionstart_time"):
         config._sessionstart_time = datetime.now()
@@ -193,14 +152,25 @@ def pytest_configure(config):
         _MASTER_CONFIG = config
 
 
-# pytest_configure_node removed - redundant since pytest_configure handles worker initialization
-
+# ============================================================================
+# HOOK 4: pytest_collection
+# Execution: At start of collection phase (after configure)
+# Purpose: Optimize test collection by parsing command-line test selectors
+# ============================================================================
 
 def pytest_collection(session):
     """
-    Called at the start of the collection phase.
-    Parses command line arguments to identify specific test selections.
-    This data helps pytest_generate_tests skip unnecessary parametrization.
+    Parse and store test selections for optimization.
+    
+    Parses command-line arguments to identify specific test selections
+    (e.g., tests/test_file.py::test_name) and stores them in config.
+    
+    Purpose:
+    - Helps pytest_generate_tests skip parametrization for unselected tests
+    - Reduces overhead when running specific tests instead of full suite
+    
+    Config attributes created:
+    - config._specified_test_functions: Set of selected test node IDs
     """
     config = session.config
     specified_tests = set()
@@ -237,20 +207,30 @@ def pytest_collection(session):
     config._specified_test_functions = specified_tests
 
 
+# ============================================================================
+# HOOK 5: pytest_generate_tests
+# Execution: For each test function during collection (after pytest_collection)
+# Purpose: Parametrize tests with CSV/Excel data rows
+# ============================================================================
+
 def pytest_generate_tests(metafunc):
     """
-    Called for each test function to generate parameters.
-
-    Parametrizes tests with rows from CSV file when:
-    - Test uses 'row' fixture
+    Parametrize tests with data from CSV/Excel files.
+    
+    Triggered when:
     - Test has @pytest.mark.datafile("filename.csv") marker
-
-    Prerequisites:
-    - @pytest.mark.datafile("filename.csv") marker must be present
-    - Test function must declare 'row' parameter/fixture
-
-    Optimization: Skips parametrization for tests not explicitly requested
-    when specific tests are run (e.g., pytest tests/test_file.py::specific_test)
+    - Test declares 'row' as a fixture/parameter
+    
+    Process:
+    1. Check for @pytest.mark.datafile marker
+    2. Validate 'row' fixture is used by test
+    3. Check if test is in selected tests (skip if not)
+    4. Load CSV/Excel data from data/ directory
+    5. Parametrize test with loaded rows
+    
+    Optimization:
+    - Skips tests not explicitly requested in command line
+    - Reduces overhead for targeted test runs
     """
     # Check if test has @pytest.mark.datafile marker
     marker = metafunc.definition.get_closest_marker("datafile")
@@ -259,9 +239,6 @@ def pytest_generate_tests(metafunc):
 
     # Check if test actually uses the 'row' fixture
     if "row" not in metafunc.fixturenames:
-        logger.debug(
-            f"Skipping parametrization for {metafunc.nodeid}: 'row' fixture not found"
-        )
         return
 
     csv_file = marker.args[0]
@@ -279,9 +256,6 @@ def pytest_generate_tests(metafunc):
             for spec in config._specified_test_functions
         )
         if not is_requested:
-            logger.debug(
-                f"Skipping parametrization for {test_nodeid}: not in requested tests"
-            )
             return
 
     # Validate test file path exists
@@ -294,19 +268,8 @@ def pytest_generate_tests(metafunc):
     test_dir = Path(test_file_path).parent
     data_path = test_dir.parent / "data" / csv_file
 
-    # Allow source projects to override data loading logic via hook
-    rows = None
-    if hasattr(config.hook, "robo_load_test_data"):
-        hook_result = config.hook.robo_load_test_data(data_path=data_path)
-        if hook_result is not None:
-            rows = hook_result
-            logger.debug(
-                f"Test data loaded via robo_load_test_data hook: {len(rows)} rows"
-            )
-
-    # Fall back to default data loader if hook didn't provide rows
-    if not rows:
-        rows = load_test_data(data_path)
+    # Load test data from CSV/Excel file
+    rows = load_test_data(data_path)
 
     if not rows:
         logger.error(
@@ -315,87 +278,107 @@ def pytest_generate_tests(metafunc):
         )
         pytest.fail(f"Data file '{csv_file}' could not be loaded from {data_path}")
 
-    logger.info(f"Parametrized {test_nodeid} with {len(rows)} rows from {csv_file}")
     metafunc.parametrize("row", rows)
 
 
+# ============================================================================
+# HOOK 6: pytest_runtest_makereport
+# Execution: For each test phase (setup, call, teardown)
+# Purpose: Capture test results and metadata
+# Runs on: Both master and worker processes
+# ============================================================================
+
 def pytest_runtest_makereport(item, call):
     """
-    Called to create a test report for each test phase.
-
-    Collects test result summary including status, duration, title, and error logs.
-    Runs on both main process and xdist workers.
+    Capture individual test result data.
+    
+    Called for each test phase:
+    - setup: Before test execution
+    - call: During test execution (captured by this hook)
+    - teardown: After test execution
+    
+    Result data collected:
+    - test_status: PASSED, FAILED, ERROR, SKIPPED, RERUN
+    - test_name: Full pytest node ID
+    - title: Test title from @pytest.mark.datafile row or docstring
+    - Phase, Request Category, Request Sub Category, Center: From CSV data
+    - duration: Execution time in seconds (sum of setup + call + teardown)
+    - error_log: Exception message if test failed
+    
+    Data storage:
+    - Appended to config.test_results_summary (master and workers)
+    - Synced to workeroutput for xdist workers
     """
-
-    if call.when != "call":
+    
+    # Store durations for each phase on the item
+    if not hasattr(item, "_phase_durations"):
+        item._phase_durations = {}
+    
+    # Capture duration for this phase
+    item._phase_durations[call.when] = getattr(call, "duration", 0)
+    
+    # Store call phase info for later use
+    if call.when == "call":
+        item._call_excinfo = call.excinfo
+        item._call_when = call.when
+    
+    # Only create final result after teardown completes
+    if call.when != "teardown":
         return
 
     # Extract test metadata from parametrized 'row' fixture if present
-    title = phase = req_cat = req_sub_cat = center = ""
+    test_id = phase = req_cat = req_sub_cat = center = ""
 
     if "row" in item.fixturenames:
         row_value = item.funcargs.get("row", {})
-        title = row_value.get("Title", "")
         phase = row_value.get("Phase", "")
         req_cat = row_value.get("Request Category", "")
         req_sub_cat = row_value.get("Request Sub Category", "")
-        center = row_value.get("Center", "")
-    else:
-        title = getattr(item, "name", item.nodeid)
+        center = row_value.get("Center", "")  
 
-    # Determine test status and error log
-    if call.excinfo is None:
+    # Determine test status and error log from call phase
+    call_excinfo = getattr(item, "_call_excinfo", None)
+    if call_excinfo is None:
         status = "PASSED"
         error_log = ""
     else:
         # Safely extract error message
         try:
-            error_repr = call.excinfo.getrepr()
+            error_repr = call_excinfo.getrepr()
             error_log = (
                 error_repr.reprcrash.message
                 if error_repr.reprcrash
-                else str(call.excinfo.value)
+                else str(call_excinfo.value)
             )
         except (AttributeError, Exception):
             error_log = (
-                str(call.excinfo.value) if call.excinfo.value else "Unknown error"
+                str(call_excinfo.value) if call_excinfo.value else "Unknown error"
             )
 
         # Determine status based on exception type
-        if call.excinfo.typename == "Skipped":
+        if call_excinfo.typename == "Skipped":
             status = "SKIPPED"
         elif hasattr(call, "wasxfail") and call.wasxfail:
             status = "RERUN"
         else:
             status = "ERROR"
+    
+    # Calculate total duration (setup + call + teardown)
+    total_duration = sum(item._phase_durations.values())
 
-    # Extract test case name from docstring if available
-    test_case_name = None
-    if item.obj and hasattr(item.obj, "__doc__") and item.obj.__doc__:
-        try:
-            test_case_name = item.obj.__doc__.strip().split("\n")[0]
-        except Exception:
-            test_case_name = None
-
-    result = {
+    test_data = {
         "test_status": status,
-        "test_case_name": test_case_name,
-        "test_name": item.nodeid,
-        "title": title,
+        "test_id": getattr(item, "name", item.nodeid),
+        "Center": center,
         "Phase": phase,
         "Request Category": req_cat,
         "Request Sub Category": req_sub_cat,
-        "Center": center,
         "error_log": error_log,
-        "duration": getattr(call, "duration", None),
+        "duration": total_duration,
     }
 
-    logger.debug(
-        f"Collected result for {item.nodeid}: status={status}, duration={getattr(call, 'duration', None)}"
-    )
-
     # Store result in config (initialized for both main and worker processes)
-    item.config.test_results_summary.append(result)
+    item.config.test_results_summary.append(test_data)
 
     # For xdist workers: sync to workeroutput for master aggregation
     if hasattr(item.config, "workeroutput"):
@@ -404,16 +387,29 @@ def pytest_runtest_makereport(item, call):
         )
 
 
+# ============================================================================
+# HOOK 7: pytest_testnodedown
+# Execution: When xdist worker process terminates
+# Purpose: Aggregate results from workers back to master process
+# Runs on: Master process only (for each completed worker)
+# ============================================================================
+
 def pytest_testnodedown(node, error):
     """
-    Called when a worker node goes down (xdist).
-
-    Aggregates test results from the completed worker into master config.
+    Aggregate results from xdist worker process.
+    
     Called once per worker after all tests finish on that worker.
-
+    Only runs in the master process.
+    
+    Process:
+    1. Get worker ID from node configuration
+    2. Extract test_results_summary from worker's workeroutput
+    3. Flatten and aggregate into master's _test_results_from_workers list
+    4. Log worker status (success or error)
+    
     Args:
-        node: xdist worker node
-        error: Exception if worker crashed, None otherwise
+        node: xdist worker node object
+        error: Exception if worker crashed, None if successful
     """
     # Use global _MASTER_CONFIG for aggregation
     config = _MASTER_CONFIG
@@ -434,7 +430,6 @@ def pytest_testnodedown(node, error):
 
     # Validate node has workeroutput
     if not hasattr(node, "workeroutput") or node.workeroutput is None:
-        logger.info(f"Worker {worker_id} has no workeroutput to aggregate")
         return
 
     # Initialize aggregation list if needed
@@ -445,24 +440,39 @@ def pytest_testnodedown(node, error):
     results = node.workeroutput.get("test_results_summary", [])
 
     if not results:
-        logger.info(f"Worker {worker_id} completed with 0 results")
         return
 
-    logger.info(f"Aggregating {len(results)} results from worker {worker_id}")
     flatten_results(results, config)
-    logger.debug(f"Successfully aggregated results from worker {worker_id}")
 
+
+# ============================================================================
+# HOOK 8: pytest_unconfigure
+# Execution: Last hook - after all teardown and xdist aggregation complete
+# Purpose: Generate final HTML report with all collected results
+# Runs on: Master process only (not in xdist workers)
+# ============================================================================
 
 def pytest_unconfigure(config):
     """
-    Called after all teardown and xdist worker aggregation is complete.
-    Aggregates all test results and generates the HTML report.
-
+    Generate final HTML report after all tests complete.
+    
+    Called after all tests have finished and xdist workers are aggregated.
     Only runs in master process (not in xdist workers).
+    
+    Process:
+    1. Skip if running in xdist worker process
+    2. Aggregate results from master and all workers
+    3. Create report summary with statistics
+    4. Print results summary to console
+    5. Generate and save HTML report
+    
+    Report includes:
+    - Test execution dashboard with charts
+    - Results summary with status breakdown
+    - Detailed results table with all test data
     """
     # Only run in master process
     if hasattr(config, "workerinput"):
-        logger.info("Skipping unconfigure in worker process")
         return
 
     # Get report configuration
@@ -473,39 +483,20 @@ def pytest_unconfigure(config):
     # Aggregate test results from master and workers
     report_rows = aggregate_test_results(config)
 
-    # Allow source projects to customize report_rows via hook
-    if hasattr(config.hook, "robo_report_rows"):
-        hook_result = config.hook.robo_report_rows(
-            config=config, report_rows=report_rows
-        )
-        if hook_result is not None:
-            report_rows = hook_result
-            logger.debug("Report rows customized by source project hook")
-
     # Print results summary to console
     print_results_summary(report_rows)
 
     # Create summary object matching template expectations
     report_summary = create_report_summary(report_rows, start_time)
 
-    # Allow source projects to customize report_summary via hook
-    if hasattr(config.hook, "robo_report_summary"):
-        hook_result = config.hook.robo_report_summary(
-            config=config, report_summary=report_summary, report_rows=report_rows
-        )
-        if hook_result is not None:
-            report_summary = hook_result
-            logger.debug("Report summary customized by source project hook")
-
     try:
         generate_report(report_rows, report_summary, start_time)
-        logger.info("HTML report generation completed successfully")
     except Exception as e:
         logger.error(f"Failed to generate HTML report: {e}", exc_info=True)
 
 
 # ============================================================================
-# Fixtures (provided by plugin for all consuming projects)
+# Pytest Fixtures (provided by plugin for all consuming projects)
 # ============================================================================
 
 
