@@ -25,11 +25,11 @@ def profile_name_from_driver(driver) -> str:
 
 def load_test_data(path: Path):
     """Load test data rows from CSV or Excel file using pandas.
-    
+
     Supports multiple file formats and encodings:
     - CSV files with utf-8-sig, latin-1, or utf-8 encoding
     - Excel workbooks (.xlsx)
-    
+
     Returns a list of dict rows suitable for pytest parametrization.
     """
 
@@ -63,7 +63,9 @@ def load_test_data(path: Path):
                 except UnicodeDecodeError:
                     df = None
             if df is None:
-                logger.error(f"Could not load CSV file {path} with any supported encoding")
+                logger.error(
+                    f"Could not load CSV file {path} with any supported encoding"
+                )
                 return []
         df = df.fillna("")
 
@@ -143,3 +145,69 @@ def flatten_results(res, cfg):
             flatten_results(x, cfg)
     else:
         pass
+
+
+# ============================================================================
+# Helper Functions
+# ============================================================================
+
+
+def build_test_data(item, call_excinfo, custom_attribute_data=None):
+    """
+    Build test result data dictionary from test execution information.
+
+    Args:
+        item: pytest Item object containing test metadata
+        call_excinfo: Exception info from call phase (or None if passed)
+        custom_attribute_data: Optional dict with custom attributes from robo_custom_attribute_data hook
+
+    Returns:
+        Dictionary containing test result data:
+        - test_status: PASSED, FAILED, or SKIPPED
+        - test_id: Test name/nodeid
+        - error_log: Exception message if test failed
+        - duration: Total execution time in seconds (sum of all phases)
+        - Any additional fields from custom_attributes dict
+    """
+
+    # Determine test status and error log from call phase
+    if call_excinfo is None:
+        status = "PASSED"
+        error_log = ""
+    else:
+        # Safely extract error message
+        try:
+            error_repr = call_excinfo.getrepr()
+            error_log = (
+                error_repr.reprcrash.message
+                if error_repr.reprcrash
+                else str(call_excinfo.value)
+            )
+        except (AttributeError, Exception):
+            error_log = (
+                str(call_excinfo.value) if call_excinfo.value else "Unknown error"
+            )
+
+        # Determine status based on exception type
+        if call_excinfo.typename == "Skipped":
+            status = "SKIPPED"
+        else:
+            status = "FAILED"
+    # Calculate total duration (setup + call + teardown)
+    total_duration = sum(item._phase_durations.values())
+
+    test_id = getattr(item, "name", item.nodeid)
+
+    test_data = {
+        # "test_case_name": test_case_name,
+        "test_status": status,
+        "test_id": test_id,
+        "error_log": error_log,
+        "duration": total_duration,
+    }
+
+    # Merge custom_attribute_data if provided (can override or extend test_data)
+    if custom_attribute_data and isinstance(custom_attribute_data, dict):
+        test_data.update(custom_attribute_data)
+
+    return test_data

@@ -66,3 +66,33 @@ def robo_report_rows(config, report_rows):
             return report_rows
     """
     pass
+
+
+@pytest.hookspec
+def robo_custom_attribute_data(row_fixture):
+    """
+    Hook specification for source projects to provide custom test data attributes.
+
+    Source projects can implement this hook in their conftest.py to:
+    - Extract custom attributes from row_fixture object
+    - Add project-specific fields to test results
+    - Transform or enrich test data
+
+    Args:
+        row_fixture: Dictionary with parametrized test data from CSV
+
+    Returns:
+        Dictionary with custom attributes to merge into test_data.
+        Keys in this dict will override or extend the default test_data fields.
+
+    Example in source project's conftest.py:
+        def robo_custom_attribute_data(row_fixture):
+            return {
+                'test_case_name': row_fixture.get('Test Case Name', ''),
+                'custom_field': row_fixture.get('Custom Field', ''),
+                'priority': row_fixture.get('Priority', 'Medium'),
+            }
+    """
+    # Default implementation returns empty dict
+    # Source projects should override this in their conftest.py
+    return {}

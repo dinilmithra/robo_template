@@ -33,7 +33,7 @@ from .report_generator import (
     flatten_results,
     aggregate_test_results,
 )
-from .utils.RoboHelper import print_results_summary
+from .utils.RoboHelper import print_results_summary, build_test_data
 from .utils import get_env, load_test_data
 from . import hookspec
 
@@ -141,6 +141,25 @@ def pytest_configure(config):
     if not hasattr(config.pluginmanager, "_robo_hookspecs_registered"):
         config.pluginmanager.add_hookspecs(hookspec)
         config.pluginmanager._robo_hookspecs_registered = True
+
+    # Try to register conftest as a plugin if it has robo_ hook functions
+    # This allows conftest.py to implement custom hooks without @pytest.hookimpl
+    if hasattr(config, "hook"):
+        try:
+            # Get the conftest module from the session if available
+            # Pytest automatically loads conftest modules
+            import sys
+
+            for module_name, module in list(sys.modules.items()):
+                if "conftest" in module_name and hasattr(
+                    module, "robo_get_source_data"
+                ):
+                    # Register the conftest module with the plugin manager
+                    config.pluginmanager.register(module, "conftest_robo_hooks")
+                    logger.debug(f"Registered conftest module: {module_name}")
+                    break
+        except Exception as e:
+            logger.debug(f"Could not register conftest robo hooks: {e}")
 
     # Store session start time for HTML report duration calculation (master only)
     if not hasattr(config, "workerinput") and not hasattr(config, "_sessionstart_time"):
@@ -287,7 +306,6 @@ def pytest_generate_tests(metafunc):
 
 
 # ============================================================================
-# HOOK 6: pytest_runtest_makereport
 # Execution: For each test phase (setup, call, teardown)
 # Purpose: Capture test results and metadata
 # Runs on: Both master and worker processes
@@ -333,56 +351,53 @@ def pytest_runtest_makereport(item, call):
         return
 
     # Extract test metadata from parametrized 'row' fixture if present
-    test_id = test_case_name = phase = req_cat = req_sub_cat = center = ""
-
+    row_fixture = {}
     if "row" in item.fixturenames:
-        row_value = item.funcargs.get("row", {})
-        test_case_name = row_value.get("Test Case Name", "")
-        phase = row_value.get("Phase", "")
-        req_cat = row_value.get("Request Category", "")
-        req_sub_cat = row_value.get("Request Sub-Category", "")
-        center = row_value.get("Center", "")
+        row_fixture = item.funcargs.get("row", {})
 
-    # Determine test status and error log from call phase
+    # Get stored call phase exception info
     call_excinfo = getattr(item, "_call_excinfo", None)
-    if call_excinfo is None:
-        status = "PASSED"
-        error_log = ""
-    else:
-        # Safely extract error message
+
+    # Call hook to allow source projects to provide custom attributes
+    custom_attribute_data = None
+
+    # Try hook mechanism first
+    try:
+        hook_results = item.config.hook.robo_custom_attribute_data(
+            row_fixture=row_fixture
+        )
+        if isinstance(hook_results, list) and len(hook_results) > 0:
+            custom_attribute_data = next(
+                (r for r in hook_results if isinstance(r, dict) and r), None
+            )
+        elif isinstance(hook_results, dict):
+            custom_attribute_data = hook_results if hook_results else None
+    except Exception as e:
+        logger.debug(f"Hook robo_custom_attribute_data: {e}")
+
+    # Fallback: Try to call robo_custom_attribute_data directly if it exists in conftest
+    if custom_attribute_data is None:
         try:
-            error_repr = call_excinfo.getrepr()
-            error_log = (
-                error_repr.reprcrash.message
-                if error_repr.reprcrash
-                else str(call_excinfo.value)
-            )
-        except (AttributeError, Exception):
-            error_log = (
-                str(call_excinfo.value) if call_excinfo.value else "Unknown error"
-            )
+            # Try to find and call robo_custom_attribute_data from the loaded conftest modules
+            import sys
 
-        # Determine status based on exception type
-        if call_excinfo.typename == "Skipped":
-            status = "SKIPPED"
-        else:
-            status = "FAILED"
+            for module_name, module in list(sys.modules.items()):
+                if "conftest" in module_name and hasattr(
+                    module, "robo_custom_attribute_data"
+                ):
+                    logger.debug(
+                        f"[FALLBACK] Found robo_custom_attribute_data in {module_name}"
+                    )
+                    custom_attribute_data = module.robo_custom_attribute_data(row_fixture)
+                    logger.debug(
+                        f"[FALLBACK] Called robo_custom_attribute_data, got: {custom_attribute_data}"
+                    )
+                    break
+        except Exception as e:
+            logger.debug(f"Fallback hook call error: {e}") 
 
-    # Calculate total duration (setup + call + teardown)
-    total_duration = sum(item._phase_durations.values())
-    test_id = (getattr(item, "name", item.nodeid),)
-
-    test_data = {
-        "test_case_name": test_case_name,
-        "test_status": status,
-        "test_id": test_id,
-        "Center": center,
-        "Phase": phase,
-        "Request Category": req_cat,
-        "Request Sub-Category": req_sub_cat,
-        "error_log": error_log,
-        "duration": total_duration,
-    }
+    # Build test result data dictionary with optional custom attributes merge
+    test_data = build_test_data(item, call_excinfo, custom_attribute_data)
 
     # Store result in config (initialized for both main and worker processes)
     item.config.test_results_summary.append(test_data)
