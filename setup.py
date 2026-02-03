@@ -13,18 +13,18 @@ if readme_file.exists():
     long_description = readme_file.read_text(encoding='utf-8')
 
 setup(
-    name="robo-reporter",
+    name="robo-automation-test-kit",
     version="1.0.0",
     author="Your Name",
     author_email="your.email@example.com",
-    description="Comprehensive test reporting for Python projects with HTML reports and chart visualizations",
+    description="Complete automation testing starter kit with pytest plugin, HTML reports, charts, and parallel execution support",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/robo-reporter",
+    url="https://github.com/yourusername/robo-automation-test-kit",
     packages=find_packages(),
     include_package_data=True,
     package_data={
-        'robo_reporter': [
+        'robo_automation_test_kit': [
             'templates/**/*',
             'templates/**/**/*',
             'templates/**/**/**/*',
@@ -53,8 +53,8 @@ setup(
     ],
     entry_points={
         "pytest11": [
-            "robo-reporter = robo_reporter.plugin",
+            "robo-automation-test-kit = robo_automation_test_kit.plugin",
         ]
     },
-    keywords="pytest reporting html charts visualization test-automation robo",
+    keywords="pytest reporting html charts visualization test-automation automation-testing robo",
 )

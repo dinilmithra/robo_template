@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "robo-reporter"
+name = "robo-automation-test-kit"
 version = "1.0.0"
-description = "Comprehensive test reporting for Python projects with HTML reports and chart visualizations"
+description = "Complete automation testing starter kit with pytest plugin, HTML reports, charts, and parallel execution support"
 readme = "README.md"
 authors = [
     {name = "Your Name", email = "your.email@example.com"}
@@ -34,16 +34,16 @@ dependencies = [
 requires-python = ">=3.8"
 
 [project.urls]
-Homepage = "https://github.com/yourusername/robo-reporter"
-Documentation = "https://github.com/yourusername/robo-reporter#readme"
-Repository = "https://github.com/yourusername/robo-reporter"
-"Bug Tracker" = "https://github.com/yourusername/robo-reporter/issues"
+Homepage = "https://github.com/yourusername/robo-automation-test-kit"
+Documentation = "https://github.com/yourusername/robo-automation-test-kit#readme"
+Repository = "https://github.com/yourusername/robo-automation-test-kit"
+"Bug Tracker" = "https://github.com/yourusername/robo-automation-test-kit/issues"
 
 [project.entry-points.pytest11]
-robo-reporter = "robo_reporter.plugin"
+robo-automation-test-kit = "robo_automation_test_kit.plugin"
 
 [tool.setuptools]
-packages = ["robo_reporter", "robo_reporter.utils", "robo_reporter.utils.reports"]
+packages = ["robo_automation_test_kit", "robo_automation_test_kit.utils", "robo_automation_test_kit.utils.reports"]
 
 [tool.setuptools.package-data]
-robo_reporter = ["templates/**/*", "utils/**/*"]
+robo_automation_test_kit = ["templates/**/*", "utils/**/*"]

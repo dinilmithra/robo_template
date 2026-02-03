@@ -16,7 +16,7 @@ load_dotenv()
 # ============================================================================
 # Project-Specific Fixtures (if needed)
 # ============================================================================
-# All standard fixtures (row, driver, wait) are provided by robo_reporter plugin
+# All standard fixtures (row, driver, wait) are provided by robo_automation_test_kit plugin
 # Add project-specific fixtures here if required
 
 
@@ -24,7 +24,7 @@ load_dotenv()
 # robo_modify_report_row Hook Implementation
 # ============================================================================
 # This function enriches test report rows with custom data from CSV test data
-# Called directly by robo_reporter plugin for each test execution
+# Called directly by robo_automation_test_kit plugin for each test execution
 
 
 def robo_modify_report_row(report_row, test_data):

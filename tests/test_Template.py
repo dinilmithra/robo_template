@@ -2,8 +2,8 @@ import logging
 import time
 
 import pytest
-from robo_reporter.utils import get_env
-from robo_reporter.utils.RoboHelper import profile_name_from_driver
+from robo_automation_test_kit.utils import get_env
+from robo_automation_test_kit.utils.RoboHelper import profile_name_from_driver
 
 logger = logging.getLogger(__name__)
 

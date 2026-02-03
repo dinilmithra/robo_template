@@ -1,5 +1,5 @@
 """
-Hook specifications for robo_reporter plugin.
+Hook specifications for robo_automation_test_kit plugin.
 These hooks allow source projects to customize the reporting behavior.
 """
 

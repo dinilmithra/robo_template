@@ -51,13 +51,14 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 
-from .report_generator import (
+from .utils.RoboHelper import (
+    print_results_summary,
+    build_test_data,
     create_report_summary,
     generate_report,
     flatten_results,
     aggregate_test_results,
 )
-from .utils.RoboHelper import print_results_summary, build_test_data
 from .utils import get_env, load_test_data
 
 

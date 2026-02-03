@@ -40,7 +40,7 @@ def get_html_template():
         env = Environment(loader=FileSystemLoader(str(source_template_dir)))
         return env.get_template("html_template.html")
     
-    # Fall back to package template inside robo_reporter directory
+    # Fall back to package template inside robo_automation_test_kit directory
     package_root = os.path.abspath(
         os.path.join(os.path.dirname(__file__), "..", "..")
     )

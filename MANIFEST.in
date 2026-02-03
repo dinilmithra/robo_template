@@ -1,11 +1,11 @@
 # Include template files
-recursive-include robo_reporter/templates *
-recursive-include robo_reporter/templates/html_report *
-recursive-include robo_reporter/templates/html_report/components *
-recursive-include robo_reporter/templates/html_report/scripts *
+recursive-include robo_automation_test_kit/templates *
+recursive-include robo_automation_test_kit/templates/html_report *
+recursive-include robo_automation_test_kit/templates/html_report/components *
+recursive-include robo_automation_test_kit/templates/html_report/scripts *
 
 # Include utils module
-recursive-include robo_reporter/utils *.py
+recursive-include robo_automation_test_kit/utils *.py
 
 # Include documentation
 include README.md
