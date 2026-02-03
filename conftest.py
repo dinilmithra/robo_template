@@ -5,9 +5,8 @@ All fixtures and hooks are provided by the robo_reporter plugin
 
 import pytest
 from dotenv import load_dotenv
-
-
 import logging
+
 logger = logging.getLogger(__name__)
 
 # Load environment variables from .env file
@@ -22,46 +21,43 @@ load_dotenv()
 
 
 # ============================================================================
-# robo_custom_attribute_data Hook Implementation
+# robo_modify_report_row Hook Implementation
 # ============================================================================
-# Source projects can implement this function to provide custom test data attributes
-# This function is called for each test and receives the item and row_fixture objects
-# No @pytest.hookimpl decorator needed - it's registered programmatically
+# This function enriches test report rows with custom data from CSV test data
+# Called directly by robo_reporter plugin for each test execution
 
 
-def robo_custom_attribute_data(row_fixture):
+def robo_modify_report_row(report_row, test_data):
     """
     Example implementation of robo_custom_attribute_data hook.
-    
+
     This function allows the source project to:
-    - Extract custom attributes from the row_fixture
+    - Extract custom attributes from the data_row
     - Add project-specific fields to test results
     - Transform or enrich test data
-    
+
     Args:
-        row_fixture: Dictionary with parametrized test data from CSV
-    
+        report_row: Dictionary with default test report data
+        test_data: Dictionary with parametrized test data from CSV
+
     Returns:
         Dictionary with custom attributes to merge into test_data.
         Keys will override or extend the default test_data fields.
     """
-    # Example: Extract 'Test Case Name' from row_fixture
+    # Example: Extract 'Test Case Name' from data_row
     # and add any custom fields
-    
-    return {
-        "test_case_name": row_fixture.get("Test Case Name", ""),
-        "Phase" :row_fixture.get("Phase", ""),
-        "Request Category" :row_fixture.get("Request Category", ""),
-        "Request Sub-Category" :row_fixture.get("Request Sub-Category", ""),
-        "Center" :row_fixture.get("Center", ""),
+    report_row["test_case_name"] = test_data.get("Test Case Name", "")
+    report_row["Phase"] = test_data.get("Phase", "")
+    report_row["Request Category"] = test_data.get("Request Category", "")
+    report_row["Request Sub-Category"] = test_data.get("Request Sub-Category", "")
+    report_row["Center"] = test_data.get("Center", "")
+    # Add more custom attributes as needed from data_row
+    # "Jira ID": data_row.get("Jira ID", ""),
+    # "sprint": data_row.get("Sprint", ""),
 
-        # Add more custom attributes as needed from row_fixture
-        # "priority": row_fixture.get("Priority", ""),
-        # "sprint": row_fixture.get("Sprint", ""),
-    }
+    return report_row
 
 
 # ============================================================================
 # Report Summary Hook
 # ============================================================================
-

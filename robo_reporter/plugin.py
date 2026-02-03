@@ -2,15 +2,39 @@
 Robo Reporter - Pytest Plugin
 Collects test results and generates HTML reports with chart visualizations.
 
-PYTEST HOOK EXECUTION ORDER:
-1. pytest_addoption - Register command-line options
-2. pytest_plugin_registered - Check and manage plugin registration
-3. pytest_configure - Initialize configuration and global state
-4. pytest_collection - Optimize test collection
-5. pytest_generate_tests - Parametrize tests with CSV data
-6. pytest_runtest_makereport - Capture individual test results
-7. pytest_testnodedown - Aggregate results from xdist workers
-8. pytest_unconfigure - Generate final HTML report
+PYTEST HOOK EXECUTION ORDER (Session Lifecycle):
+=====================================================
+
+PHASE 1: SESSION INITIALIZATION
+1. pytest_addoption             - Register command-line options (called once per session)
+2. pytest_plugin_registered     - Plugin registration/lifecycle management
+3. pytest_configure             - Initialize plugin state and global config
+4. pytest_sessionstart          - Session initialization complete
+
+PHASE 2: TEST COLLECTION
+5. pytest_collection            - Parse test selections and optimize collection
+6. pytest_collection_modifyitems - Modify collected test items
+7. pytest_generate_tests        - Parametrize tests with CSV/Excel data (per test function)
+8. pytest_collection_finish     - Collection phase complete
+
+PHASE 3: TEST EXECUTION (per test)
+9. pytest_runtest_protocol      - Protocol for running individual tests
+   ├─ pytest_runtest_setup      - Setup phase before test
+   ├─ pytest_runtest_call       - Test execution phase
+   ├─ pytest_runtest_teardown   - Teardown phase after test
+   └─ pytest_runtest_makereport - Capture result after each phase
+
+PHASE 4: XDIST WORKER COORDINATION (parallel execution only)
+10. pytest_configure_node       - Configure xdist worker nodes (workers only)
+11. pytest_testnodedown         - Aggregate worker results to master (master only)
+
+PHASE 5: SESSION FINALIZATION
+12. pytest_sessionfinish        - Session finalization before report generation
+13. pytest_unconfigure          - Generate final HTML report (master only)
+
+CUSTOM HOOKS (Robo Reporter Extensions):
+========================================
+- robo_modify_report_row        - Allow projects to provide custom test attributes
 """
 
 import logging
@@ -35,7 +59,6 @@ from .report_generator import (
 )
 from .utils.RoboHelper import print_results_summary, build_test_data
 from .utils import get_env, load_test_data
-from . import hookspec
 
 
 logger = logging.getLogger(__name__)
@@ -49,6 +72,7 @@ load_dotenv()
 # ============================================================================
 
 _MASTER_CONFIG = None  # Global reference to master config for xdist aggregation
+_CONFTEST_HOOK_MODULE = None  # Cached conftest module with robo_modify_report_row
 
 
 # ============================================================================
@@ -126,41 +150,29 @@ def pytest_configure(config):
     Initialize robo-reporter plugin configuration.
 
     Responsibilities:
-    1. Register hook specifications from hookspec.py module
-    2. Store session start time for report duration calculation
-    3. Initialize test_results_summary list on config object
-    4. Store master config reference in global variable for xdist workers
+    1. Store session start time for report duration calculation
+    2. Initialize test_results_summary list on config object
+    3. Store master config reference in global variable for xdist workers
 
     Config attributes created:
     - config.test_results_summary: List to collect test result dicts
     - config._sessionstart_time: Session start datetime
     - _MASTER_CONFIG: Global ref to master config for worker aggregation
+
+    Note on hooks:
+    - Project-specific hook implementations (robo_modify_report_row) in conftest.py
+      are discovered via direct module lookup in pytest_runtest_makereport
+    - pytest's hook discovery can't find hookimpls in modules loaded before hookspec
+      registration, so we use direct sys.modules lookup instead (more reliable)
     """
-    # Register hook specifications so source projects can implement them
-    # This ensures hookimpls from conftest.py are recognized
-    if not hasattr(config.pluginmanager, "_robo_hookspecs_registered"):
-        config.pluginmanager.add_hookspecs(hookspec)
-        config.pluginmanager._robo_hookspecs_registered = True
-
-    # Try to register conftest as a plugin if it has robo_ hook functions
-    # This allows conftest.py to implement custom hooks without @pytest.hookimpl
-    if hasattr(config, "hook"):
-        try:
-            # Get the conftest module from the session if available
-            # Pytest automatically loads conftest modules
-            import sys
-
-            for module_name, module in list(sys.modules.items()):
-                if "conftest" in module_name and hasattr(
-                    module, "robo_get_source_data"
-                ):
-                    # Register the conftest module with the plugin manager
-                    config.pluginmanager.register(module, "conftest_robo_hooks")
-                    logger.debug(f"Registered conftest module: {module_name}")
-                    break
-        except Exception as e:
-            logger.debug(f"Could not register conftest robo hooks: {e}")
-
+    # Discover and cache conftest module with hook implementation (optimization)
+    global _CONFTEST_HOOK_MODULE
+    if _CONFTEST_HOOK_MODULE is None:
+        for module_name, module in list(sys.modules.items()):
+            if "conftest" in module_name and hasattr(module, "robo_modify_report_row"):
+                _CONFTEST_HOOK_MODULE = module
+                break
+    
     # Store session start time for HTML report duration calculation (master only)
     if not hasattr(config, "workerinput") and not hasattr(config, "_sessionstart_time"):
         config._sessionstart_time = datetime.now()
@@ -175,9 +187,37 @@ def pytest_configure(config):
 
 
 # ============================================================================
-# HOOK 4: pytest_collection
-# Execution: At start of collection phase (after configure)
+# HOOK 4: pytest_sessionstart
+# Execution: After session object has been created and before collection starts
+# Purpose: Setup session-specific state before test collection
+# Runs on: Both master and worker processes
+# ============================================================================
+
+
+def pytest_sessionstart(session):
+    """
+    Called at session initialization after test collection configuration.
+
+    Responsibilities:
+    - Session state is now available
+    - Plugin setup is complete
+    - Ready to start test collection
+
+    Called after:
+    - pytest_configure (plugin setup)
+    - Command-line options registered
+
+    Called before:
+    - pytest_collection (test collection starts)
+    """
+    pass
+
+
+# ============================================================================
+# HOOK 5: pytest_collection
+# Execution: At start of collection phase (after sessionstart)
 # Purpose: Optimize test collection by parsing command-line test selectors
+# Runs on: Both master and worker processes
 # ============================================================================
 
 
@@ -231,9 +271,41 @@ def pytest_collection(session):
 
 
 # ============================================================================
-# HOOK 5: pytest_generate_tests
-# Execution: For each test function during collection (after pytest_collection)
+# HOOK 6: pytest_collection_modifyitems
+# Execution: After test collection, before parametrization of individual tests
+# Purpose: Modify collected test items (reorder, filter, mark, etc.)
+# Runs on: Both master and worker processes
+# ============================================================================
+
+
+def pytest_collection_modifyitems(session, config, items):
+    """
+    Modify collected test items before test execution.
+
+    Called after pytest_collection and before parametrization.
+    Allows plugins to:
+    - Filter or reorder tests
+    - Add marks to tests
+    - Modify test parameters
+    - Skip tests programmatically
+
+    Purpose:
+    - Reserved for future enhancements (filtering, reordering, etc.)
+    - Can add custom marks or modify test execution order
+
+    Args:
+        session: Test session object
+        config: Pytest config object
+        items: List of collected test items
+    """
+    pass
+
+
+# ============================================================================
+# HOOK 7: pytest_generate_tests
+# Execution: For each test function during collection (after collection_modifyitems)
 # Purpose: Parametrize tests with CSV/Excel data rows
+# Runs on: Both master and worker processes
 # ============================================================================
 
 
@@ -306,7 +378,35 @@ def pytest_generate_tests(metafunc):
 
 
 # ============================================================================
-# Execution: For each test phase (setup, call, teardown)
+# HOOK 8: pytest_collection_finish
+# Execution: After all tests have been collected
+# Purpose: Final opportunity to modify or inspect collected tests
+# Runs on: Both master and worker processes
+# ============================================================================
+
+
+def pytest_collection_finish(session):
+    """
+    Called after collection of all test items is complete.
+
+    Process:
+    - All tests have been discovered and collected
+    - pytest_generate_tests has been called for all test functions
+    - Ready to begin test execution phase
+
+    Purpose:
+    - Log collection summary
+    - Reserved for future enhancements (reporting, validation, etc.)
+
+    Args:
+        session: Test session object containing all collected items
+    """
+    pass
+
+
+# ============================================================================
+# HOOK 9: pytest_runtest_makereport
+# Execution: For each test phase (setup, call, teardown) after phase completes
 # Purpose: Capture test results and metadata
 # Runs on: Both master and worker processes
 # ============================================================================
@@ -350,57 +450,34 @@ def pytest_runtest_makereport(item, call):
     if call.when != "teardown":
         return
 
-    # Extract test metadata from parametrized 'row' fixture if present
-    row_fixture = {}
-    if "row" in item.fixturenames:
-        row_fixture = item.funcargs.get("row", {})
+    # Build test result data dictionary
+    report_row = build_test_data(item)
+    test_data = item.funcargs.get("row", {}) if "row" in item.fixturenames else {}
 
-    # Get stored call phase exception info
-    call_excinfo = getattr(item, "_call_excinfo", None)
+    # Allow source projects to modify/enrich the report row via conftest hook
+    final_report_row = report_row
 
-    # Call hook to allow source projects to provide custom attributes
-    custom_attribute_data = None
-
-    # Try hook mechanism first
-    try:
-        hook_results = item.config.hook.robo_custom_attribute_data(
-            row_fixture=row_fixture
-        )
-        if isinstance(hook_results, list) and len(hook_results) > 0:
-            custom_attribute_data = next(
-                (r for r in hook_results if isinstance(r, dict) and r), None
-            )
-        elif isinstance(hook_results, dict):
-            custom_attribute_data = hook_results if hook_results else None
-    except Exception as e:
-        logger.debug(f"Hook robo_custom_attribute_data: {e}")
-
-    # Fallback: Try to call robo_custom_attribute_data directly if it exists in conftest
-    if custom_attribute_data is None:
+    # Use cached conftest module for better performance
+    if _CONFTEST_HOOK_MODULE is not None:
         try:
-            # Try to find and call robo_custom_attribute_data from the loaded conftest modules
-            import sys
-
-            for module_name, module in list(sys.modules.items()):
-                if "conftest" in module_name and hasattr(
-                    module, "robo_custom_attribute_data"
-                ):
-                    logger.debug(
-                        f"[FALLBACK] Found robo_custom_attribute_data in {module_name}"
-                    )
-                    custom_attribute_data = module.robo_custom_attribute_data(row_fixture)
-                    logger.debug(
-                        f"[FALLBACK] Called robo_custom_attribute_data, got: {custom_attribute_data}"
-                    )
-                    break
+            result = _CONFTEST_HOOK_MODULE.robo_modify_report_row(
+                report_row=report_row, test_data=test_data
+            )
+            if result and isinstance(result, dict):
+                final_report_row = result
+            elif result is not None:
+                logger.warning(
+                    f"robo_modify_report_row returned {type(result).__name__} instead of dict, "
+                    f"ignoring result for test {item.nodeid}"
+                )
         except Exception as e:
-            logger.debug(f"Fallback hook call error: {e}") 
-
-    # Build test result data dictionary with optional custom attributes merge
-    test_data = build_test_data(item, call_excinfo, custom_attribute_data)
+            logger.error(
+                f"Error calling robo_modify_report_row for test {item.nodeid}: {e}",
+                exc_info=True
+            )
 
     # Store result in config (initialized for both main and worker processes)
-    item.config.test_results_summary.append(test_data)
+    item.config.test_results_summary.append(final_report_row)
 
     # For xdist workers: sync to workeroutput for master aggregation
     if hasattr(item.config, "workeroutput"):
@@ -410,7 +487,37 @@ def pytest_runtest_makereport(item, call):
 
 
 # ============================================================================
-# HOOK 7: pytest_testnodedown
+# HOOK 10: pytest_configure_node (xdist only)
+# Execution: When xdist worker node is being configured
+# Purpose: Initialize worker-specific configuration
+# Runs on: Worker processes only (not on master)
+# ============================================================================
+
+
+def pytest_configure_node(node):
+    """
+    Configure individual xdist worker node.
+
+    Called for each worker process during parallel execution.
+    Only runs in worker processes, not in master process.
+
+    Responsibilities:
+    - Initialize worker-specific test results list
+    - Setup worker state for result collection
+    - Ensure worker isolation from master process
+
+    Args:
+        node: xdist WorkerController object representing the worker node
+
+    Note:
+    This hook is only called when running with pytest-xdist.
+    Does not run in serial execution mode.
+    """
+    pass
+
+
+# ============================================================================
+# HOOK 11: pytest_testnodedown (xdist only)
 # Execution: When xdist worker process terminates
 # Purpose: Aggregate results from workers back to master process
 # Runs on: Master process only (for each completed worker)
@@ -469,7 +576,42 @@ def pytest_testnodedown(node, error):
 
 
 # ============================================================================
-# HOOK 8: pytest_unconfigure
+# HOOK 12: pytest_sessionfinish
+# Execution: After all tests have finished, before pytest_unconfigure
+# Purpose: Perform final cleanup and session-level operations
+# Runs on: Both master and worker processes
+# ============================================================================
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """
+    Called after test session is complete, before report generation.
+
+    Process:
+    - All tests have been executed
+    - xdist workers have been aggregated (if applicable)
+    - Before HTML report generation
+
+    Purpose:
+    - Perform final session cleanup
+    - Aggregate final results
+    - Execute session-level teardown logic
+
+    Args:
+        session: Test session object
+        exitstatus: Exit status code of the session
+                   (0: all passed, 1: failures, 2: interrupted, etc.)
+
+    Note:
+    - Called on both master and worker processes
+    - Worker processes will not generate reports
+    - This runs before pytest_unconfigure hook
+    """
+    pass
+
+
+# ============================================================================
+# HOOK 13: pytest_unconfigure
 # Execution: Last hook - after all teardown and xdist aggregation complete
 # Purpose: Generate final HTML report with all collected results
 # Runs on: Master process only (not in xdist workers)
@@ -480,20 +622,38 @@ def pytest_unconfigure(config):
     """
     Generate final HTML report after all tests complete.
 
-    Called after all tests have finished and xdist workers are aggregated.
+    Called after all tests have finished, xdist workers aggregated, and cleanup complete.
     Only runs in master process (not in xdist workers).
 
-    Process:
-    1. Skip if running in xdist worker process
-    2. Aggregate results from master and all workers
-    3. Create report summary with statistics
-    4. Print results summary to console
-    5. Generate and save HTML report
+    Execution Sequence:
+    1. Verify running in master process (skip if worker)
+    2. Retrieve session start time
+    3. Aggregate test results from master and all workers
+    4. Create summary statistics (pass/fail/skip counts)
+    5. Generate HTML report with visualizations
+    6. Save report to reports/ directory with timestamp
 
-    Report includes:
-    - Test execution dashboard with charts
-    - Results summary with status breakdown
+    Process:
+    - Aggregate results from config.test_results_summary (master)
+    - Aggregate results from config._test_results_from_workers (all workers)
+    - Calculate summary statistics (total, passed, failed, skipped)
+    - Render Jinja2 HTML template with chart data
+    - Save to reports/test_report_<timestamp>.html
+
+    Report Contents:
+    - Test execution dashboard with summary metrics
+    - Status breakdown charts (passed/failed/skipped)
+    - Category breakdown by custom fields (Phase, Center, etc.)
     - Detailed results table with all test data
+    - Test durations and error messages
+
+    Args:
+        config: Pytest config object
+
+    Note:
+    - Called only in master process: skips if hasattr(config, 'workerinput')
+    - Called only once per session after all xdist aggregation
+    - No action needed if no tests were collected/executed
     """
     # Only run in master process
     if hasattr(config, "workerinput"):
@@ -507,8 +667,8 @@ def pytest_unconfigure(config):
     # Aggregate test results from master and workers
     report_rows = aggregate_test_results(config)
 
-    # Print results summary to console
-    print_results_summary(report_rows)
+    # # Print results summary to console
+    # print_results_summary(report_rows)
 
     # Create summary object matching template expectations
     report_summary = create_report_summary(report_rows, start_time)
@@ -529,8 +689,45 @@ def row(request):
     """
     Fixture to provide parametrized test data row.
 
-    Used with @pytest.mark.parametrize("row", test_data) or
-    pytest_generate_tests hook for data-driven testing.
+    SCOPE: Function-scoped (created/destroyed for each test)
+
+    Usage:
+    ======
+    Parametrize tests with CSV/Excel data:
+
+    @pytest.mark.datafile("TestData.csv")
+    def test_user_login(row, driver, wait):
+        '''Test login with parametrized data.
+
+        Args:
+            row: Dict containing one row from TestData.csv
+            driver: Selenium WebDriver instance
+            wait: WebDriverWait with configured timeout
+        '''
+        username = row['Username']
+        password = row['Password']
+        # ... test code ...
+
+    Supported Markers:
+    - @pytest.mark.datafile("filename.csv"): Load parametrized data from CSV
+    - @pytest.mark.datafile("filename.xlsx"): Load parametrized data from Excel
+
+    CSV/Excel Location:
+    - Files must be in: data/ directory (sibling to tests/ directory)
+    - Example: data/TestData.csv → loaded for tests in tests/test_Template.py
+
+    Encoding Support:
+    - CSV: utf-8-sig, latin-1, utf-8 (tries all with fallback)
+    - Excel: .xlsx files via openpyxl library
+
+    Row Data:
+    - Each row is converted to a dict with column headers as keys
+    - Empty cells are converted to empty strings (not NaN or None)
+    - All values are strings (numeric values must be converted in test)
+
+    Request Parameter:
+    - Provided automatically by pytest
+    - request.param contains the parametrized value (the row dict)
     """
     return request.param
 
@@ -540,10 +737,57 @@ def driver(request):
     """
     Fixture that provides a Chrome WebDriver instance with a unique profile.
 
+    SCOPE: Function-scoped (created/destroyed for each test)
+
     Automatically handles:
-    - Creating unique browser profile
+    - Creating unique browser profile (isolated from other tests)
     - Setting headless mode based on HEADLESS environment variable
     - Cleanup and profile directory removal on test completion
+
+    Environment Variables:
+    - HEADLESS (default: "N")
+      - "Y" = Run browser in headless mode (no GUI)
+      - "N" = Run browser with visible window
+      - Useful for CI/CD environments vs. local debugging
+
+    Browser Configuration:
+    - --user-data-dir: Unique temporary profile directory per test
+    - --no-sandbox: Required for some environments
+    - --disable-dev-shm-usage: Prevents shared memory issues
+    - --headless=new: Modern headless implementation (if HEADLESS="Y")
+
+    Profile Isolation:
+    - Each test gets its own temporary profile directory
+    - Profile directory is automatically cleaned up after test
+    - Prevents cache/cookie contamination between tests
+
+    Cleanup:
+    - Automatically called via pytest finalizer
+    - Calls driver.quit() to close browser
+    - Removes temporary profile directory recursively
+
+    Usage:
+    ======
+    def test_login(driver, wait):
+        '''Test with Selenium WebDriver.
+
+        Args:
+            driver: Chrome WebDriver instance
+            wait: WebDriverWait instance (see wait fixture)
+        '''
+        driver.get("https://example.com/login")
+        wait.until(expected_conditions.presence_of_element_located((By.ID, "username")))
+        # ... test code ...
+
+    Browser Information:
+    - profile_name: Get profile name via profile_name_from_driver(driver)
+    - capabilities: driver.capabilities contains browser details
+
+    Args:
+        request: pytest request fixture (provided by pytest)
+
+    Returns:
+        Selenium WebDriver instance for Chrome browser
     """
     # Create a temporary directory for the unique profile
     profile_dir = tempfile.mkdtemp(prefix="chrome_profile_")
@@ -582,8 +826,41 @@ def wait(driver):
     """
     Function-scoped WebDriverWait fixture.
 
-    Provides WebDriverWait with timeout from WAIT_TIME environment variable.
-    Default timeout is 15 seconds.
+    SCOPE: Function-scoped (created/destroyed for each test)
+
+    Purpose:
+    - Provides WebDriverWait instance for implicit waits in tests
+    - Configured with timeout from WAIT_TIME environment variable
+    - Default timeout is 15 seconds if not configured
+
+    Environment Variables:
+    - WAIT_TIME (default: "15")
+      - Integer number of seconds to wait for elements
+      - Used by Selenium's expected_conditions in tests
+
+    Usage:
+    ======
+    def test_find_element(driver, wait):
+        '''Test with WebDriverWait for element visibility.'''
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support import expected_conditions as EC
+
+        element = wait.until(
+            EC.presence_of_element_located((By.ID, "submit_button"))
+        )
+        element.click()
+
+    Common Expected Conditions:
+    - EC.presence_of_element_located((By, locator)): Element in DOM
+    - EC.visibility_of_element_located((By, locator)): Element visible
+    - EC.element_to_be_clickable((By, locator)): Element clickable
+    - EC.text_to_be_present_in_element((By, locator), text): Text present
+
+    Args:
+        driver: Selenium WebDriver instance (provided by driver fixture)
+
+    Returns:
+        WebDriverWait instance with configured timeout
     """
     timeout = int(get_env("WAIT_TIME", "15"))
     return WebDriverWait(driver, timeout)

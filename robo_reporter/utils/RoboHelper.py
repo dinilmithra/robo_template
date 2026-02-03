@@ -152,13 +152,12 @@ def flatten_results(res, cfg):
 # ============================================================================
 
 
-def build_test_data(item, call_excinfo, custom_attribute_data=None):
+def build_test_data(item):
     """
     Build test result data dictionary from test execution information.
 
     Args:
         item: pytest Item object containing test metadata
-        call_excinfo: Exception info from call phase (or None if passed)
         custom_attribute_data: Optional dict with custom attributes from robo_custom_attribute_data hook
 
     Returns:
@@ -169,6 +168,9 @@ def build_test_data(item, call_excinfo, custom_attribute_data=None):
         - duration: Total execution time in seconds (sum of all phases)
         - Any additional fields from custom_attributes dict
     """
+
+    # Get stored call phase exception info
+    call_excinfo = getattr(item, "_call_excinfo", None)
 
     # Determine test status and error log from call phase
     if call_excinfo is None:
@@ -198,7 +200,7 @@ def build_test_data(item, call_excinfo, custom_attribute_data=None):
 
     test_id = getattr(item, "name", item.nodeid)
 
-    test_data = {
+    data_row = {
         # "test_case_name": test_case_name,
         "test_status": status,
         "test_id": test_id,
@@ -206,8 +208,4 @@ def build_test_data(item, call_excinfo, custom_attribute_data=None):
         "duration": total_duration,
     }
 
-    # Merge custom_attribute_data if provided (can override or extend test_data)
-    if custom_attribute_data and isinstance(custom_attribute_data, dict):
-        test_data.update(custom_attribute_data)
-
-    return test_data
+    return data_row
