@@ -333,7 +333,7 @@ def pytest_runtest_makereport(item, call):
         return
 
     # Extract test metadata from parametrized 'row' fixture if present
-    test_case_name = phase = req_cat = req_sub_cat = center = ""
+    test_id = test_case_name = phase = req_cat = req_sub_cat = center = ""
 
     if "row" in item.fixturenames:
         row_value = item.funcargs.get("row", {})
@@ -370,11 +370,12 @@ def pytest_runtest_makereport(item, call):
 
     # Calculate total duration (setup + call + teardown)
     total_duration = sum(item._phase_durations.values())
+    test_id = (getattr(item, "name", item.nodeid),)
 
     test_data = {
         "test_case_name": test_case_name,
         "test_status": status,
-        "test_id": getattr(item, "name", item.nodeid),
+        "test_id": test_id,
         "Center": center,
         "Phase": phase,
         "Request Category": req_cat,
