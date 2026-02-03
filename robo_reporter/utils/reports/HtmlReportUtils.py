@@ -132,26 +132,22 @@ def generate_html_report(all_results, output_path, report_data=None):
     summary = get_report_summary(all_results, report_data)
 
     template = get_html_template()
-
-    # Format each test case duration as HH:MM:SS
-    formatted_results = []
-    for result in all_results:
-        duration_val = result.get("duration", "")
-        if isinstance(duration_val, (float, int)):
-            hours = int(duration_val // 3600)
-            minutes = int((duration_val % 3600) // 60)
-            seconds = int(duration_val % 60)
-            duration_str = f"{hours:02}:{minutes:02}:{seconds:02}"
-        else:
-            duration_str = str(duration_val)
-        result_copy = dict(result)
-        result_copy["duration"] = duration_str
-        formatted_results.append(result_copy)
+    
+    # Create format_duration function and register it with template
+    def format_duration_func(seconds):
+        if isinstance(seconds, (float, int)):
+            hours = int(seconds // 3600)
+            minutes = int((seconds % 3600) // 60)
+            secs = int(seconds % 60)
+            return f"{hours:02}:{minutes:02}:{secs:02}"
+        return str(seconds)
+    
+    template.globals['format_duration'] = format_duration_func
 
     html_content = template.render(
         report_title=report_title,
         summary=summary,
-        all_results=formatted_results,
+        all_results=all_results,
     )
 
     with open(output_path, "w", encoding="utf-8") as f:

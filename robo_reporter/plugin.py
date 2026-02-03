@@ -61,10 +61,11 @@ _MASTER_CONFIG = None  # Global reference to master config for xdist aggregation
 # Purpose: Register custom command-line options for the pytest command
 # ============================================================================
 
+
 def pytest_addoption(parser):
     """
     Register command-line options for the robo-reporter plugin.
-    
+
     Options:
     - --robo-report: Custom path for HTML report output
     - --robo-report-title: Custom title for the HTML report
@@ -92,10 +93,11 @@ def pytest_addoption(parser):
 # Purpose: Manage plugin lifecycle - can unregister plugins if conditions met
 # ============================================================================
 
+
 def pytest_plugin_registered(plugin, manager):
     """
     Called when a plugin is registered.
-    
+
     Functionality:
     - Checks PARALLEL_EXECUTION environment variable
     - Unregisters pytest-xdist if PARALLEL_EXECUTION is disabled
@@ -118,16 +120,17 @@ def pytest_plugin_registered(plugin, manager):
 # Runs on: Both master and worker processes
 # ============================================================================
 
+
 def pytest_configure(config):
     """
     Initialize robo-reporter plugin configuration.
-    
+
     Responsibilities:
     1. Register hook specifications from hookspec.py module
     2. Store session start time for report duration calculation
     3. Initialize test_results_summary list on config object
     4. Store master config reference in global variable for xdist workers
-    
+
     Config attributes created:
     - config.test_results_summary: List to collect test result dicts
     - config._sessionstart_time: Session start datetime
@@ -138,7 +141,7 @@ def pytest_configure(config):
     if not hasattr(config.pluginmanager, "_robo_hookspecs_registered"):
         config.pluginmanager.add_hookspecs(hookspec)
         config.pluginmanager._robo_hookspecs_registered = True
-    
+
     # Store session start time for HTML report duration calculation (master only)
     if not hasattr(config, "workerinput") and not hasattr(config, "_sessionstart_time"):
         config._sessionstart_time = datetime.now()
@@ -158,17 +161,18 @@ def pytest_configure(config):
 # Purpose: Optimize test collection by parsing command-line test selectors
 # ============================================================================
 
+
 def pytest_collection(session):
     """
     Parse and store test selections for optimization.
-    
+
     Parses command-line arguments to identify specific test selections
     (e.g., tests/test_file.py::test_name) and stores them in config.
-    
+
     Purpose:
     - Helps pytest_generate_tests skip parametrization for unselected tests
     - Reduces overhead when running specific tests instead of full suite
-    
+
     Config attributes created:
     - config._specified_test_functions: Set of selected test node IDs
     """
@@ -213,21 +217,22 @@ def pytest_collection(session):
 # Purpose: Parametrize tests with CSV/Excel data rows
 # ============================================================================
 
+
 def pytest_generate_tests(metafunc):
     """
     Parametrize tests with data from CSV/Excel files.
-    
+
     Triggered when:
     - Test has @pytest.mark.datafile("filename.csv") marker
     - Test declares 'row' as a fixture/parameter
-    
+
     Process:
     1. Check for @pytest.mark.datafile marker
     2. Validate 'row' fixture is used by test
     3. Check if test is in selected tests (skip if not)
     4. Load CSV/Excel data from data/ directory
     5. Parametrize test with loaded rows
-    
+
     Optimization:
     - Skips tests not explicitly requested in command line
     - Reduces overhead for targeted test runs
@@ -288,53 +293,55 @@ def pytest_generate_tests(metafunc):
 # Runs on: Both master and worker processes
 # ============================================================================
 
+
 def pytest_runtest_makereport(item, call):
     """
     Capture individual test result data.
-    
+
     Called for each test phase:
     - setup: Before test execution
     - call: During test execution (captured by this hook)
     - teardown: After test execution
-    
+
     Result data collected:
-    - test_status: PASSED, FAILED, ERROR, SKIPPED, RERUN
+    - test_status: PASSED, FAILED, or SKIPPED (RERUN status is converted to FAILED)
     - test_name: Full pytest node ID
     - title: Test title from @pytest.mark.datafile row or docstring
     - Phase, Request Category, Request Sub Category, Center: From CSV data
     - duration: Execution time in seconds (sum of setup + call + teardown)
     - error_log: Exception message if test failed
-    
+
     Data storage:
     - Appended to config.test_results_summary (master and workers)
     - Synced to workeroutput for xdist workers
     """
-    
+
     # Store durations for each phase on the item
     if not hasattr(item, "_phase_durations"):
         item._phase_durations = {}
-    
+
     # Capture duration for this phase
     item._phase_durations[call.when] = getattr(call, "duration", 0)
-    
+
     # Store call phase info for later use
     if call.when == "call":
         item._call_excinfo = call.excinfo
         item._call_when = call.when
-    
+
     # Only create final result after teardown completes
     if call.when != "teardown":
         return
 
     # Extract test metadata from parametrized 'row' fixture if present
-    test_id = phase = req_cat = req_sub_cat = center = ""
+    test_case_name = phase = req_cat = req_sub_cat = center = ""
 
     if "row" in item.fixturenames:
         row_value = item.funcargs.get("row", {})
+        test_case_name = row_value.get("Test Case Name", "")
         phase = row_value.get("Phase", "")
         req_cat = row_value.get("Request Category", "")
-        req_sub_cat = row_value.get("Request Sub Category", "")
-        center = row_value.get("Center", "")  
+        req_sub_cat = row_value.get("Request Sub-Category", "")
+        center = row_value.get("Center", "")
 
     # Determine test status and error log from call phase
     call_excinfo = getattr(item, "_call_excinfo", None)
@@ -358,21 +365,20 @@ def pytest_runtest_makereport(item, call):
         # Determine status based on exception type
         if call_excinfo.typename == "Skipped":
             status = "SKIPPED"
-        elif hasattr(call, "wasxfail") and call.wasxfail:
-            status = "RERUN"
         else:
-            status = "ERROR"
-    
+            status = "FAILED"
+
     # Calculate total duration (setup + call + teardown)
     total_duration = sum(item._phase_durations.values())
 
     test_data = {
+        "test_case_name": test_case_name,
         "test_status": status,
         "test_id": getattr(item, "name", item.nodeid),
         "Center": center,
         "Phase": phase,
         "Request Category": req_cat,
-        "Request Sub Category": req_sub_cat,
+        "Request Sub-Category": req_sub_cat,
         "error_log": error_log,
         "duration": total_duration,
     }
@@ -394,19 +400,20 @@ def pytest_runtest_makereport(item, call):
 # Runs on: Master process only (for each completed worker)
 # ============================================================================
 
+
 def pytest_testnodedown(node, error):
     """
     Aggregate results from xdist worker process.
-    
+
     Called once per worker after all tests finish on that worker.
     Only runs in the master process.
-    
+
     Process:
     1. Get worker ID from node configuration
     2. Extract test_results_summary from worker's workeroutput
     3. Flatten and aggregate into master's _test_results_from_workers list
     4. Log worker status (success or error)
-    
+
     Args:
         node: xdist worker node object
         error: Exception if worker crashed, None if successful
@@ -452,20 +459,21 @@ def pytest_testnodedown(node, error):
 # Runs on: Master process only (not in xdist workers)
 # ============================================================================
 
+
 def pytest_unconfigure(config):
     """
     Generate final HTML report after all tests complete.
-    
+
     Called after all tests have finished and xdist workers are aggregated.
     Only runs in master process (not in xdist workers).
-    
+
     Process:
     1. Skip if running in xdist worker process
     2. Aggregate results from master and all workers
     3. Create report summary with statistics
     4. Print results summary to console
     5. Generate and save HTML report
-    
+
     Report includes:
     - Test execution dashboard with charts
     - Results summary with status breakdown

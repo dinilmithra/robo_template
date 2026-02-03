@@ -108,30 +108,22 @@ def create_report_summary(report_rows, start_time=None):
     }
 
 
-def format_test_durations(report_rows):
+def format_duration(seconds):
     """
-    Format test case durations from seconds to HH:MM:SS format.
+    Convert duration in seconds to HH:MM:SS format string.
 
     Args:
-        report_rows: List of test result dictionaries with duration in seconds
+        seconds: Duration in seconds (float or int)
 
     Returns:
-        List of test result dictionaries with duration formatted as HH:MM:SS
+        Formatted duration string as HH:MM:SS
     """
-    formatted_results = []
-    for result in report_rows:
-        duration_val = result.get("duration", "")
-        if isinstance(duration_val, (float, int)):
-            hours = int(duration_val // 3600)
-            minutes = int((duration_val % 3600) // 60)
-            seconds = int(duration_val % 60)
-            duration_formatted = f"{hours:02}:{minutes:02}:{seconds:02}"
-        else:
-            duration_formatted = str(duration_val)
-        result_copy = dict(result)
-        result_copy["duration"] = duration_formatted
-        formatted_results.append(result_copy)
-    return formatted_results
+    if isinstance(seconds, (float, int)):
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        secs = int(seconds % 60)
+        return f"{hours:02}:{minutes:02}:{secs:02}"
+    return str(seconds)
 
 
 def get_report_path():
@@ -160,15 +152,12 @@ def generate_report(report_rows, report_summary, start_time):
         Path to the generated HTML report
     """
 
-    # Format each test case duration as HH:MM:SS
-    formatted_results = format_test_durations(report_rows)
-
-    # Prepare template data
+    # Prepare template data with raw numeric durations
     report_title = get_env("REPORT_TITLE", "Test Execution Report")
     template_data = {
         "report_title": report_title,
         "summary": report_summary,
-        "report_rows": formatted_results,
+        "report_rows": report_rows,
     }
 
     # Load CSS and JS files for embedding
@@ -226,6 +215,9 @@ def generate_report(report_rows, report_summary, start_time):
 
     # Load template using get_html_template() which checks source first
     template = get_html_template()
+    
+    # Register custom Jinja2 filter for duration formatting
+    template.globals['format_duration'] = format_duration
 
     # Render and save report
     try:

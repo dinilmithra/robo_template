@@ -101,8 +101,12 @@ function sortTable(header, table) {
     // Sort rows (but don't sort by the # column itself)
     if (columnIndex !== 0) {
         rows.sort((a, b) => {
-            let aValue = a.cells[columnIndex].textContent.trim();
-            let bValue = b.cells[columnIndex].textContent.trim();
+            const cellA = a.cells[columnIndex];
+            const cellB = b.cells[columnIndex];
+            
+            // Check for data-value attribute (used for numeric columns like duration)
+            let aValue = cellA.getAttribute('data-value') || cellA.textContent.trim();
+            let bValue = cellB.getAttribute('data-value') || cellB.textContent.trim();
             
             // Try to parse as number
             const aNum = parseFloat(aValue);
